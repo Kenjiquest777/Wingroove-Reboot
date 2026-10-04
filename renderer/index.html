@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; connect-src 'self' blob: data:">
+<title>WinGroove Reboot</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="win" id="app">
+  <div class="titlebar">
+    <span class="ticon"></span>
+    <span class="ttext">WinGroove Reboot</span>
+    <span class="tsf" id="sfName">no soundfont</span>
+  </div>
+
+  <div class="menubar">
+    <button class="menu" id="btnOpen" title="Open MIDI files (Ctrl+O)"><u>O</u>pen</button>
+    <button class="menu" id="btnSf" title="Load a .sf2 SoundFont"><u>S</u>oundFont</button>
+    <button class="menu" id="btnWav" title="Render current song to WAV">Save <u>W</u>AV</button>
+    <button class="menu" id="btnAbout"><u>A</u>bout</button>
+  </div>
+
+  <div class="panel lcd-wrap">
+    <div class="lcd">
+      <div class="lcd-row">
+        <span id="lcdTime" class="big">00:00</span>
+        <span class="lcd-right">
+          <span>BPM <b id="lcdBpm">---</b></span>
+          <span>VOICE <b id="lcdVoices">00</b></span>
+        </span>
+      </div>
+      <div class="lcd-row small"><span id="lcdTitle" class="marquee">Drop .mid files here</span><span id="lcdLen">--:--</span></div>
+    </div>
+    <input type="range" id="seek" min="0" max="1000" value="0" class="seek">
+  </div>
+
+  <div class="panel transport">
+    <button class="btn" id="btnPrev" title="Previous">&#9198;</button>
+    <button class="btn" id="btnRew" title="Back 5s">&#9194;</button>
+    <button class="btn wide" id="btnPlay" title="Play / Pause (Space)">&#9654;</button>
+    <button class="btn" id="btnStop" title="Stop">&#9632;</button>
+    <button class="btn" id="btnFwd" title="Forward 5s">&#9193;</button>
+    <button class="btn" id="btnNext" title="Next">&#9197;</button>
+    <button class="btn toggle" id="btnLoop" title="Repeat mode">REP: ALL</button>
+  </div>
+
+  <div class="panel sliders">
+    <label>Volume<input type="range" id="vol" min="0" max="150" value="80"><span id="volV">80</span></label>
+    <label>Reverb<input type="range" id="rev" min="0" max="100" value="60"><span id="revV">60</span></label>
+    <label>Tempo<input type="range" id="spd" min="50" max="200" value="100"><span id="spdV">100%</span></label>
+    <label>Key<input type="range" id="key" min="-12" max="12" value="0"><span id="keyV">0</span></label>
+    <label>Polyphony<select id="poly"><option>24</option><option>32</option><option>48</option><option selected>64</option><option>128</option></select></label>
+  </div>
+
+  <fieldset class="panel group">
+    <legend>Channels</legend>
+    <div class="meters" id="meters"></div>
+  </fieldset>
+
+  <fieldset class="panel group grow">
+    <legend>Playlist</legend>
+    <ol class="playlist" id="playlist"></ol>
+    <div class="plbar">
+      <button class="btn small" id="btnAdd">Add...</button>
+      <button class="btn small" id="btnRemove">Remove</button>
+      <button class="btn small" id="btnClear">Clear</button>
+      <button class="btn small toggle" id="btnShuffle">Shuffle</button>
+    </div>
+  </fieldset>
+
+  <div class="status"><span id="status">Ready</span><span id="cpu"></span></div>
+</div>
+
+<div class="dialog hidden" id="about">
+  <div class="win small-win">
+    <div class="titlebar"><span class="ttext">About WinGroove Reboot</span></div>
+    <div class="about-body">
+      <p><b>WinGroove Reboot</b> v1.0.0</p>
+      <p>A from-scratch tribute to the classic WinGroove software wavetable MIDI player for Windows 95/98.</p>
+      <p>Engine: SoundFont 2 synth on Web Audio with reverb, compressor, 16 channels, WAV export.</p>
+      <p>Put a file named <code>WinGroove.sf2</code> in <code>renderer/soundfonts/</code> to use it as the default bank.</p>
+      <p style="text-align:right"><button class="btn" id="aboutOk">OK</button></p>
+    </div>
+  </div>
+</div>
+
+<div class="dropzone hidden" id="drop">Drop MIDI / SF2 files</div>
+<input type="file" id="fileMidi" accept=".mid,.midi,.rmi,.kar" multiple hidden>
+<input type="file" id="fileSf" accept=".sf2" hidden>
+
+<script src="js/midifile.js"></script>
+<script src="js/sf2.js"></script>
+<script src="js/synth.js"></script>
+<script src="js/player.js"></script>
+<script src="js/wav.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
