@@ -1,0 +1,58 @@
+# Move this file to .github/workflows/build.yml to enable automated builds.
+# (GitHub requires the "workflow" permission to create files under .github/workflows.)
+name: Build desktop apps
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+          - os: macos-latest
+            script: dist:mac
+          - os: ubuntu-latest
+            script: dist:linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install
+        env:
+          WG_SOUNDFONT_URL: ${{ secrets.WG_SOUNDFONT_URL }}
+      - name: Ensure soundfont
+        run: npm run fetch-soundfont
+        env:
+          WG_SOUNDFONT_URL: ${{ secrets.WG_SOUNDFONT_URL }}
+      - name: Build
+        run: npm run ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wingroove-reboot-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+          if-no-files-found: ignore
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
