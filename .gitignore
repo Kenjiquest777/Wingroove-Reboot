@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.part
+renderer/soundfonts/*.sf2
+.DS_Store
