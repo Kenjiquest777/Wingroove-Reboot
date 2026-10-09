@@ -7,6 +7,8 @@
     s = Math.max(0, Math.floor(s || 0));
     return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
   };
+  const escapeHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
   const PREFS_KEY = 'wg.prefs.v1';
   const prefs = Object.assign({ vol: 80, rev: 60, spd: 100, key: 0, poly: 64, repeat: 'all', shuffle: false },
     (() => { try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch (_) { return {}; } })());
@@ -23,9 +25,116 @@
   const level = new Float32Array(16);
   const peak = new Float32Array(16);
   const muted = new Array(16).fill(false);
+  const channelOverrides = new Array(16).fill(null); // { bank, program } | null
   const pending = []; // note events waiting to hit the meters at their scheduled time
 
   const status = (t) => { $('status').textContent = t; };
+
+  /* ---------- GM Category Mapping ---------- */
+  const GM_CATEGORIES = [
+    'Piano', 'Chromatic Perc', 'Organ', 'Guitar',
+    'Bass', 'Strings', 'Ensemble', 'Brass',
+    'Reed', 'Pipe', 'Synth Lead', 'Synth Pad',
+    'Synth FX', 'Ethnic', 'Percussive', 'SFX'
+  ];
+
+  function buildPresetOptions(soundfont) {
+    if (!soundfont || !soundfont.presets || !soundfont.presets.length) {
+      return '<option value="default">(Song Default)</option>';
+    }
+    const presets = soundfont.presets.slice().sort((a, b) => {
+      if ((a.bank === 128) !== (b.bank === 128)) return a.bank === 128 ? 1 : -1;
+      if (a.bank !== b.bank) return a.bank - b.bank;
+      return a.program - b.program;
+    });
+
+    let html = '<option value="default">(Song Default)</option>';
+    const melodic0 = presets.filter((p) => p.bank === 0);
+    const drums = presets.filter((p) => p.bank === 128);
+    const others = presets.filter((p) => p.bank !== 0 && p.bank !== 128);
+
+    if (melodic0.length) {
+      if (melodic0.length >= 100) {
+        for (let i = 0; i < 16; i++) {
+          const cat = GM_CATEGORIES[i];
+          const sub = melodic0.filter((p) => p.program >= i * 8 && p.program < (i + 1) * 8);
+          if (sub.length) {
+            html += '<optgroup label="' + cat + '">';
+            for (const p of sub) {
+              const num = String(p.program + 1).padStart(3, '0');
+              html += '<option value="' + p.bank + ':' + p.program + '">' + num + ': ' + escapeHtml(p.name) + '</option>';
+            }
+            html += '</optgroup>';
+          }
+        }
+      } else {
+        html += '<optgroup label="Melodic">';
+        for (const p of melodic0) {
+          const num = String(p.program + 1).padStart(3, '0');
+          html += '<option value="' + p.bank + ':' + p.program + '">' + num + ': ' + escapeHtml(p.name) + '</option>';
+        }
+        html += '</optgroup>';
+      }
+    }
+
+    if (drums.length) {
+      html += '<optgroup label="Drum Kits (Bank 128)">';
+      for (const p of drums) {
+        const num = String(p.program + 1).padStart(3, '0');
+        html += '<option value="' + p.bank + ':' + p.program + '">' + num + ': ' + escapeHtml(p.name) + '</option>';
+      }
+      html += '</optgroup>';
+    }
+
+    if (others.length) {
+      const byBank = new Map();
+      for (const p of others) {
+        if (!byBank.has(p.bank)) byBank.set(p.bank, []);
+        byBank.get(p.bank).push(p);
+      }
+      for (const [b, group] of byBank.entries()) {
+        html += '<optgroup label="Bank ' + b + '">';
+        for (const p of group) {
+          const num = String(p.program + 1).padStart(3, '0');
+          html += '<option value="' + p.bank + ':' + p.program + '">' + num + ': ' + escapeHtml(p.name) + '</option>';
+        }
+        html += '</optgroup>';
+      }
+    }
+    return html;
+  }
+
+  function populatePresetSelects() {
+    const html = buildPresetOptions(sf);
+    meterEls.forEach((m, i) => {
+      const prevVal = m.select.value;
+      m.select.innerHTML = html;
+      if (channelOverrides[i]) {
+        m.select.value = channelOverrides[i].bank + ':' + channelOverrides[i].program;
+      } else if (synth) {
+        const c = synth.channels[i];
+        m.select.value = c.bank + ':' + c.program;
+      } else {
+        m.select.value = prevVal || 'default';
+      }
+    });
+  }
+
+  function clearAllOverrides(silent) {
+    channelOverrides.fill(null);
+    if (synth) synth.clearChannelOverrides();
+    meterEls.forEach((m, i) => {
+      m.select.classList.remove('override');
+      if (synth) {
+        const c = synth.channels[i];
+        m.select.value = c.bank + ':' + c.program;
+        m.select.title = 'Ch ' + (i + 1) + ': ' + (synth.channelPresetName(i) || '(none)') + ' - click to swap instrument';
+      } else {
+        m.select.value = 'default';
+      }
+    });
+    if (!silent) status('Channel instruments reverted to song defaults');
+  }
 
   /* ---------- audio bootstrap ---------- */
   function ensureAudio() {
@@ -35,6 +144,7 @@
       synth = new WGSynth(ctx, sf, { volume: prefs.vol / 100, reverb: prefs.rev / 100, polyphony: prefs.poly, transpose: prefs.key });
       synth.onNote = (ch, k, vel, t) => pending.push({ ch, vel, t });
       muted.forEach((m, i) => { if (m) synth.setMute(i, true); });
+      channelOverrides.forEach((ov, i) => { if (ov) synth.setChannelOverride(i, ov.bank, ov.program); });
       player = new WGPlayer(synth);
       player.setSpeed(prefs.spd / 100);
       player.onEnd = onSongEnd;
@@ -48,6 +158,7 @@
       sfLabel = label || sf.name;
       $('sfName').textContent = sfLabel + ' (' + sf.presets.length + ' presets)';
       if (synth) synth.setSoundfont(sf);
+      populatePresetSelects();
       status('SoundFont loaded: ' + sfLabel);
       return true;
     } catch (err) {
@@ -108,6 +219,8 @@
     if (i < 0 || i >= list.length) return;
     const e = list[i];
     if (!e.song) { status('Cannot play ' + e.name + ': ' + e.error); return; }
+    // Revert channel instrument overrides when swapping songs
+    clearAllOverrides(true);
     ensureAudio();
     cur = i; sel = i;
     player.load(e.song);
@@ -133,7 +246,7 @@
   function onSongEnd() {
     if (prefs.repeat === 'one') { play(); return; }
     const n = nextIndex(1);
-    if (n >= 0) select(n, true); else updatePlayBtn();
+    if (n >= 0) select(n, true); else { stop(); updatePlayBtn(); }
   }
 
   /* ---------- transport ---------- */
@@ -151,7 +264,13 @@
     if (player && player.playing) { player.pause(); status('Paused'); updatePlayBtn(); }
     else play();
   }
-  function stop() { if (player) { player.stop(); status('Stopped'); updatePlayBtn(); } }
+  function stop() {
+    if (player) { player.stop(); }
+    // Revert channel instrument overrides when playback is closed/stopped
+    clearAllOverrides(true);
+    status('Stopped');
+    updatePlayBtn();
+  }
   function nudge(sec) { if (player && player.song) player.seek(player.position + sec * player.speed); }
   function updatePlayBtn() { $('btnPlay').innerHTML = player && player.playing ? '&#10074;&#10074;' : '&#9654;'; }
 
@@ -181,6 +300,7 @@
       const ab = await WGSynth.renderOffline(sf, e.song, {
         speed: prefs.spd / 100, volume: prefs.vol / 100, reverb: prefs.rev / 100,
         polyphony: prefs.poly, transpose: prefs.key, mutedChannels: muted,
+        channelOverrides: channelOverrides,
       }, (p) => status('Rendering WAV... ' + Math.round(p * 100) + '%'));
       const wav = WGWav.encode(ab);
       const name = e.name.replace(/\.[^.]+$/, '') + '.wav';
@@ -205,14 +325,67 @@
     for (let i = 0; i < 16; i++) {
       const d = document.createElement('div');
       d.className = 'ch';
-      d.innerHTML = '<div class="bar"><div class="fill"></div><div class="peak"></div></div><div class="pan"><i></i></div><div class="num">' + (i + 1) + '</div>';
-      d.onclick = () => {
+      d.innerHTML =
+        '<div class="num" title="Ch ' + (i + 1) + ' - Click to mute">' + (i + 1) + '</div>' +
+        '<div class="bar" title="Ch ' + (i + 1) + ' - Click to mute"><div class="fill"></div><div class="peak"></div></div>' +
+        '<div class="pan" title="Stereo Pan"><i></i></div>' +
+        '<select class="inst-sel" title="Ch ' + (i + 1) + ': Instrument - Click to swap"><option value="default">(Song Default)</option></select>';
+
+      const numEl = d.querySelector('.num');
+      const barEl = d.querySelector('.bar');
+      const select = d.querySelector('.inst-sel');
+
+      const toggleMute = (e) => {
+        e.stopPropagation();
         muted[i] = !muted[i];
         d.classList.toggle('muted', muted[i]);
         if (synth) synth.setMute(i, muted[i]);
+        status('Ch ' + (i + 1) + ': ' + (muted[i] ? 'Muted' : 'Unmuted'));
       };
+      numEl.onclick = toggleMute;
+      barEl.onclick = toggleMute;
+
+      select.onclick = (e) => e.stopPropagation();
+      select.onmousedown = (e) => e.stopPropagation();
+      select.onchange = (e) => {
+        e.stopPropagation();
+        ensureAudio();
+        const val = select.value;
+        if (val === 'default') {
+          channelOverrides[i] = null;
+          if (synth) synth.setChannelOverride(i, null);
+          select.classList.remove('override');
+          if (synth) {
+            const c = synth.channels[i];
+            select.value = c.bank + ':' + c.program;
+          }
+          status('Ch ' + (i + 1) + ' reverted to song default');
+        } else {
+          const parts = val.split(':').map(Number);
+          channelOverrides[i] = { bank: parts[0], program: parts[1] };
+          if (synth) synth.setChannelOverride(i, parts[0], parts[1]);
+          select.classList.add('override');
+          const name = synth ? synth.channelPresetName(i) : '';
+          status('Ch ' + (i + 1) + ' swapped to: ' + name);
+        }
+      };
+
+      select.onmouseenter = () => {
+        if (synth) {
+          const curName = synth.channelPresetName(i) || '(none)';
+          const isOver = !!channelOverrides[i];
+          status('Ch ' + (i + 1) + ': ' + curName + (isOver ? ' [SWAPPED]' : '') + ' (click to swap instrument)');
+        }
+      };
+
       root.appendChild(d);
-      meterEls.push({ d, fill: d.querySelector('.fill'), peak: d.querySelector('.peak'), pan: d.querySelector('.pan i') });
+      meterEls.push({
+        d,
+        fill: d.querySelector('.fill'),
+        peak: d.querySelector('.peak'),
+        pan: d.querySelector('.pan i'),
+        select
+      });
     }
   })();
 
@@ -242,10 +415,18 @@
       if (synth) {
         const c = synth.channels[i];
         m.pan.style.left = 'calc(' + ((c.pan / 127) * 100).toFixed(0) + '% - 1px)';
-        if (!m.d.title || m.d.dataset.p !== c.program + ':' + c.bank) {
-          m.d.dataset.p = c.program + ':' + c.bank;
-          m.d.title = 'Ch ' + (i + 1) + ': ' + (synth.channelPresetName(i) || '(none)') + ' - click to mute';
+
+        // Sync instrument selector if not manually overridden and not currently focused
+        if (!channelOverrides[i]) {
+          const key = c.bank + ':' + c.program;
+          if (m.select.value !== key && document.activeElement !== m.select) {
+            m.select.value = key;
+          }
         }
+        const curName = synth.channelPresetName(i) || '(none)';
+        const isOver = !!channelOverrides[i];
+        const titleText = 'Ch ' + (i + 1) + ': ' + curName + (isOver ? ' [SWAPPED - click to revert/change]' : ' [click to swap]');
+        if (m.select.title !== titleText) m.select.title = titleText;
       }
     }
     if (player && player.song) {
@@ -306,6 +487,7 @@
   $('btnAdd').onclick = openMidi;
   $('btnSf').onclick = openSf;
   $('btnWav').onclick = saveWav;
+  $('btnResetCh').onclick = () => clearAllOverrides(false);
   $('btnRemove').onclick = () => {
     if (sel < 0) return;
     if (sel === cur) { stop(); cur = -1; } else if (sel < cur) cur--;
@@ -313,12 +495,21 @@
     sel = Math.min(sel, list.length - 1);
     renderList();
   };
-  $('btnClear').onclick = () => { stop(); list.length = 0; cur = sel = -1; renderList(); $('lcdTitle').textContent = 'Drop .mid files here'; $('lcdLen').textContent = '--:--'; };
+  $('btnClear').onclick = () => {
+    stop();
+    clearAllOverrides(true);
+    list.length = 0;
+    cur = sel = -1;
+    renderList();
+    $('lcdTitle').textContent = 'Drop .mid files here';
+    $('lcdLen').textContent = '--:--';
+  };
   $('btnAbout').onclick = () => $('about').classList.remove('hidden');
   $('aboutOk').onclick = () => $('about').classList.add('hidden');
 
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+    if (e.target.tagName === 'SELECT') return;
     if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
     else if (e.key === 'ArrowLeft' && e.ctrlKey) nudge(-5);
     else if (e.key === 'ArrowRight' && e.ctrlKey) nudge(5);
