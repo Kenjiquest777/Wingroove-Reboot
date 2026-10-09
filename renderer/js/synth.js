@@ -59,7 +59,7 @@
         gain.connect(this.bus);
         gain.connect(send);
         send.connect(this.reverb);
-        const c = { index: i, gain, send, muted: false };
+        const c = { index: i, gain, send, muted: false, override: null };
         this.channels.push(c);
         this.resetChannel(c, 0);
       }
@@ -80,8 +80,39 @@
       c.muted = m;
       this.applyGain(c, this.ctx.currentTime);
     }
+    setChannelOverride(ch, bank, program) {
+      const c = this.channels[ch];
+      if (!c) return;
+      if (bank == null || program == null) {
+        c.override = null;
+      } else {
+        c.override = { bank: +bank, program: +program };
+      }
+      c.preset = undefined;
+      // Cut any active sounding notes on this channel so new sound takes effect immediately
+      if (this.ctx) {
+        const now = this.ctx.currentTime;
+        for (const v of this.voices) {
+          if (v.ch === ch && !v.released) this.releaseVoice(v, now, true);
+        }
+      }
+    }
+    clearChannelOverrides() {
+      for (const c of this.channels) {
+        c.override = null;
+        c.preset = undefined;
+      }
+    }
+    getChannelOverride(ch) {
+      return this.channels[ch] ? this.channels[ch].override : null;
+    }
     channelPresetName(ch) {
       const p = this.presetFor(this.channels[ch]);
+      return p ? p.name : '';
+    }
+    channelSongPresetName(ch) {
+      const c = this.channels[ch];
+      const p = this.sf ? this.sf.find(c.bank, c.program) : null;
       return p ? p.name : '';
     }
     activeCount(t) {
@@ -113,6 +144,9 @@
       c.gain.gain.setTargetAtTime(v, t, 0.008);
     }
     presetFor(c) {
+      if (c.override) {
+        return this.sf ? this.sf.find(c.override.bank, c.override.program) : null;
+      }
       if (c.preset === undefined) c.preset = this.sf ? this.sf.find(c.bank, c.program) : null;
       return c.preset;
     }
@@ -147,7 +181,8 @@
 
     noteOn(ch, key, vel, t) {
       const c = this.channels[ch];
-      const drum = c.bank === 128;
+      const bank = c.override ? c.override.bank : c.bank;
+      const drum = bank === 128;
       const k = drum ? key : clamp(key + this.transpose, 0, 127);
       const p = this.presetFor(c);
       if (!p) return;
@@ -282,7 +317,10 @@
       const c = this.channels[ch];
       switch (cc) {
         case 0: // bank select MSB (GM2/XG drum banks map to 128)
-          if (ch !== 9) { c.bank = val === 120 || val === 127 ? 128 : val; c.preset = undefined; }
+          if (ch !== 9) {
+            c.bank = val === 120 || val === 127 ? 128 : val;
+            if (!c.override) c.preset = undefined;
+          }
           break;
         case 6: if (c.rpnMsb === 0 && c.rpnLsb === 0) c.bendRange = val; break;
         case 7: c.volume = val; this.applyGain(c, t); break;
@@ -308,7 +346,7 @@
     programChange(ch, program) {
       const c = this.channels[ch];
       c.program = program;
-      c.preset = undefined;
+      if (!c.override) c.preset = undefined;
     }
 
     pitchBend(ch, lsb, msb, t) {
@@ -343,6 +381,11 @@
     const oc = new Offline(2, Math.ceil(dur * sr), sr);
     const syn = new WGSynth(oc, sf, opts);
     (opts.mutedChannels || []).forEach((m, i) => { if (m) syn.setMute(i, true); });
+    if (opts.channelOverrides) {
+      opts.channelOverrides.forEach((ov, i) => {
+        if (ov) syn.setChannelOverride(i, ov.bank, ov.program);
+      });
+    }
     const evs = song.events;
     let i = 0;
     const sched = (limit) => {
