@@ -1,6 +1,6 @@
 {
   "name": "wingroove-reboot",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A modern remake of the classic WinGroove software-wavetable MIDI player, using the WinGroove SoundFont.",
   "main": "main.js",
   "homepage": "https://github.com/Kenjiquest777/Wingroove-Reboot",
