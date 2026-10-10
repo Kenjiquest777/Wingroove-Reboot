@@ -10,8 +10,10 @@
   const escapeHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
   const PREFS_KEY = 'wg.prefs.v1';
-  const prefs = Object.assign({ vol: 80, rev: 60, spd: 100, key: 0, poly: 64, repeat: 'all', shuffle: false },
-    (() => { try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch (_) { return {}; } })());
+  const prefs = Object.assign(
+    { vol: 80, rev: 60, comp: 50, spd: 100, key: 0, poly: 64, repeat: 'all', shuffle: false },
+    (() => { try { return JSON.parse(localStorage.getItem(PREFS_KEY)) || {}; } catch (_) { return {}; } })()
+  );
   const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (_) { /* ignore */ } };
 
   let ctx = null;
@@ -28,7 +30,12 @@
   const channelOverrides = new Array(16).fill(null); // { bank, program } | null
   const pending = []; // note events waiting to hit the meters at their scheduled time
 
+  // Instrument Window state
+  let instTargetCh = 0; // 0..15 (Ch 1..16)
+  let instSelectedPreset = null; // { bank, program, name }
+
   const status = (t) => { $('status').textContent = t; };
+  const instStatus = (t) => { $('instStatus').textContent = t; };
 
   /* ---------- GM Category Mapping ---------- */
   const GM_CATEGORIES = [
@@ -118,6 +125,9 @@
         m.select.value = prevVal || 'default';
       }
     });
+    updateInstCategories();
+    renderInstPresets();
+    renderInstChTable();
   }
 
   function clearAllOverrides(silent) {
@@ -133,7 +143,11 @@
         m.select.value = 'default';
       }
     });
-    if (!silent) status('Channel instruments reverted to song defaults');
+    renderInstChTable();
+    if (!silent) {
+      status('Channel instruments reverted to song defaults');
+      instStatus('All 16 channels reverted to song defaults');
+    }
   }
 
   /* ---------- audio bootstrap ---------- */
@@ -141,7 +155,13 @@
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       ctx = new AC({ latencyHint: 'playback' });
-      synth = new WGSynth(ctx, sf, { volume: prefs.vol / 100, reverb: prefs.rev / 100, polyphony: prefs.poly, transpose: prefs.key });
+      synth = new WGSynth(ctx, sf, {
+        volume: prefs.vol / 100,
+        reverb: prefs.rev / 100,
+        leveling: prefs.comp / 100,
+        polyphony: prefs.poly,
+        transpose: prefs.key
+      });
       synth.onNote = (ch, k, vel, t) => pending.push({ ch, vel, t });
       muted.forEach((m, i) => { if (m) synth.setMute(i, true); });
       channelOverrides.forEach((ov, i) => { if (ov) synth.setChannelOverride(i, ov.bank, ov.program); });
@@ -160,9 +180,11 @@
       if (synth) synth.setSoundfont(sf);
       populatePresetSelects();
       status('SoundFont loaded: ' + sfLabel);
+      instStatus('Loaded: ' + sfLabel + ' with ' + sf.presets.length + ' presets');
       return true;
     } catch (err) {
       status('SoundFont error: ' + err.message);
+      instStatus('SoundFont error: ' + err.message);
       return false;
     }
   }
@@ -219,7 +241,6 @@
     if (i < 0 || i >= list.length) return;
     const e = list[i];
     if (!e.song) { status('Cannot play ' + e.name + ': ' + e.error); return; }
-    // Revert channel instrument overrides when swapping songs
     clearAllOverrides(true);
     ensureAudio();
     cur = i; sel = i;
@@ -228,6 +249,7 @@
     $('lcdLen').textContent = fmt(e.song.duration);
     document.title = (e.song.title || e.name) + ' - WinGroove Reboot';
     renderList();
+    renderInstChTable();
     if (autoplay) play();
   }
 
@@ -266,7 +288,6 @@
   }
   function stop() {
     if (player) { player.stop(); }
-    // Revert channel instrument overrides when playback is closed/stopped
     clearAllOverrides(true);
     status('Stopped');
     updatePlayBtn();
@@ -298,8 +319,13 @@
     status('Rendering WAV... 0%');
     try {
       const ab = await WGSynth.renderOffline(sf, e.song, {
-        speed: prefs.spd / 100, volume: prefs.vol / 100, reverb: prefs.rev / 100,
-        polyphony: prefs.poly, transpose: prefs.key, mutedChannels: muted,
+        speed: prefs.spd / 100,
+        volume: prefs.vol / 100,
+        reverb: prefs.rev / 100,
+        leveling: prefs.comp / 100,
+        polyphony: prefs.poly,
+        transpose: prefs.key,
+        mutedChannels: muted,
         channelOverrides: channelOverrides,
       }, (p) => status('Rendering WAV... ' + Math.round(p * 100) + '%'));
       const wav = WGWav.encode(ab);
@@ -326,7 +352,7 @@
       const d = document.createElement('div');
       d.className = 'ch';
       d.innerHTML =
-        '<div class="num" title="Ch ' + (i + 1) + ' - Click to mute">' + (i + 1) + '</div>' +
+        '<div class="num" title="Ch ' + (i + 1) + ' - Click to mute / Double-click for Instruments">' + (i + 1) + '</div>' +
         '<div class="bar" title="Ch ' + (i + 1) + ' - Click to mute"><div class="fill"></div><div class="peak"></div></div>' +
         '<div class="pan" title="Stereo Pan"><i></i></div>' +
         '<select class="inst-sel" title="Ch ' + (i + 1) + ': Instrument - Click to swap"><option value="default">(Song Default)</option></select>';
@@ -344,6 +370,10 @@
       };
       numEl.onclick = toggleMute;
       barEl.onclick = toggleMute;
+      numEl.ondblclick = (e) => {
+        e.stopPropagation();
+        openInstWindow(i);
+      };
 
       select.onclick = (e) => e.stopPropagation();
       select.onmousedown = (e) => e.stopPropagation();
@@ -368,6 +398,7 @@
           const name = synth ? synth.channelPresetName(i) : '';
           status('Ch ' + (i + 1) + ' swapped to: ' + name);
         }
+        renderInstChTable();
       };
 
       select.onmouseenter = () => {
@@ -389,7 +420,195 @@
     }
   })();
 
+  /* ---------- WinGroove Instruments Window ---------- */
+  function openInstWindow(targetCh) {
+    if (typeof targetCh === 'number' && targetCh >= 0 && targetCh < 16) {
+      instTargetCh = targetCh;
+    }
+    updateInstTargetTitle();
+    renderInstChTable();
+    renderInstPresets();
+    $('dlgInst').classList.remove('hidden');
+    instStatus('Select a channel and double-click an instrument to assign');
+  }
+
+  function closeInstWindow() {
+    $('dlgInst').classList.add('hidden');
+  }
+
+  function updateInstTargetTitle() {
+    $('instTargetChTitle').textContent = 'Target: Channel ' + (instTargetCh + 1) + (instTargetCh === 9 ? ' [Drums]' : '');
+  }
+
+  function updateInstCategories() {
+    const sel = $('instCatFilter');
+    sel.innerHTML =
+      '<option value="all">All Categories</option>' +
+      '<option value="drums">Drum Kits (Bank 128)</option>';
+    GM_CATEGORIES.forEach((cat, idx) => {
+      sel.innerHTML += '<option value="cat:' + idx + '">' + (idx + 1) + '. ' + cat + '</option>';
+    });
+  }
+
+  function getFilteredPresets() {
+    if (!sf || !sf.presets) return [];
+    const catVal = $('instCatFilter').value || 'all';
+    const query = ($('instSearch').value || '').trim().toLowerCase();
+
+    return sf.presets.filter((p) => {
+      // Category filter
+      if (catVal === 'drums') {
+        if (p.bank !== 128) return false;
+      } else if (catVal.startsWith('cat:')) {
+        const idx = Number(catVal.slice(4));
+        if (p.bank !== 0) return false;
+        if (p.program < idx * 8 || p.program >= (idx + 1) * 8) return false;
+      }
+
+      // Search text filter
+      if (query) {
+        const nameMatch = p.name.toLowerCase().includes(query);
+        const progMatch = String(p.program + 1).includes(query);
+        if (!nameMatch && !progMatch) return false;
+      }
+      return true;
+    }).sort((a, b) => {
+      if ((a.bank === 128) !== (b.bank === 128)) return a.bank === 128 ? 1 : -1;
+      if (a.bank !== b.bank) return a.bank - b.bank;
+      return a.program - b.program;
+    });
+  }
+
+  function renderInstPresets() {
+    const box = $('instListbox');
+    box.innerHTML = '';
+    const presets = getFilteredPresets();
+
+    if (!presets.length) {
+      box.innerHTML = '<div style="padding:6px; color:#888;">(No instruments match filter)</div>';
+      instSelectedPreset = null;
+      return;
+    }
+
+    presets.forEach((p) => {
+      const item = document.createElement('div');
+      item.className = 'inst-preset-item';
+      const num = String(p.program + 1).padStart(3, '0');
+      const bTag = p.bank !== 0 ? ' [B:' + p.bank + ']' : '';
+      item.textContent = num + ': ' + p.name + bTag;
+      item.title = 'Bank ' + p.bank + ' Prog ' + p.program + ' - ' + p.name;
+
+      if (instSelectedPreset && instSelectedPreset.bank === p.bank && instSelectedPreset.program === p.program) {
+        item.classList.add('selected');
+      }
+
+      item.onclick = () => {
+        instSelectedPreset = p;
+        box.querySelectorAll('.inst-preset-item').forEach((el) => el.classList.remove('selected'));
+        item.classList.add('selected');
+        instStatus('Selected: ' + num + ': ' + p.name + ' (Bank ' + p.bank + ')');
+      };
+
+      item.ondblclick = () => {
+        instSelectedPreset = p;
+        assignSelectedInstrument();
+      };
+
+      box.appendChild(item);
+    });
+
+    if (!instSelectedPreset && presets.length) {
+      instSelectedPreset = presets[0];
+      const first = box.querySelector('.inst-preset-item');
+      if (first) first.classList.add('selected');
+    }
+  }
+
+  function renderInstChTable() {
+    const table = $('instChTable');
+    table.innerHTML = '';
+
+    for (let i = 0; i < 16; i++) {
+      const row = document.createElement('div');
+      row.className = 'inst-ch-row';
+      if (i === instTargetCh) row.classList.add('selected');
+      if (channelOverrides[i]) row.classList.add('override');
+
+      let curName = '(none)';
+      if (synth) curName = synth.channelPresetName(i) || '(none)';
+
+      const isOver = !!channelOverrides[i];
+      row.innerHTML =
+        '<span class="ch-idx">Ch ' + String(i + 1).padStart(2, '0') + (i === 9 ? ' [D]' : '') + '</span>' +
+        '<span class="ch-name" title="' + escapeHtml(curName) + '">' + escapeHtml(curName) + '</span>' +
+        '<span class="ch-tag">' + (isOver ? 'CUSTOM' : 'DEFAULT') + '</span>';
+
+      row.onclick = () => {
+        instTargetCh = i;
+        updateInstTargetTitle();
+        renderInstChTable();
+      };
+
+      table.appendChild(row);
+    }
+  }
+
+  function assignSelectedInstrument() {
+    if (!instSelectedPreset) {
+      instStatus('Please select an instrument from the list first.');
+      return;
+    }
+    ensureAudio();
+    const ch = instTargetCh;
+    const p = instSelectedPreset;
+
+    channelOverrides[ch] = { bank: p.bank, program: p.program };
+    if (synth) synth.setChannelOverride(ch, p.bank, p.program);
+
+    meterEls[ch].select.value = p.bank + ':' + p.program;
+    meterEls[ch].select.classList.add('override');
+
+    renderInstChTable();
+    status('Ch ' + (ch + 1) + ' assigned to: ' + p.name);
+    instStatus('Channel ' + (ch + 1) + ' assigned to: ' + p.name);
+  }
+
+  function auditionCurrentPreset() {
+    if (!instSelectedPreset) {
+      instStatus('Please select an instrument to audition.');
+      return;
+    }
+    ensureAudio();
+    const key = Number($('instAuditionKey').value) || 60;
+    if (synth && synth.auditionNote) {
+      synth.auditionNote(instSelectedPreset.bank, instSelectedPreset.program, key, 105, 0.9);
+      instStatus('Auditioning: ' + instSelectedPreset.name + ' on key ' + key);
+    }
+  }
+
+  // Instrument Window event handlers
+  $('btnInst').onclick = () => openInstWindow(cur >= 0 ? instTargetCh : 0);
+  $('instClose').onclick = closeInstWindow;
+  $('btnInstAssign').onclick = assignSelectedInstrument;
+  $('btnInstAudition').onclick = auditionCurrentPreset;
+  $('btnInstResetSelected').onclick = () => {
+    ensureAudio();
+    channelOverrides[instTargetCh] = null;
+    if (synth) synth.setChannelOverride(instTargetCh, null);
+    meterEls[instTargetCh].select.classList.remove('override');
+    if (synth) {
+      const c = synth.channels[instTargetCh];
+      meterEls[instTargetCh].select.value = c.bank + ':' + c.program;
+    }
+    renderInstChTable();
+    instStatus('Channel ' + (instTargetCh + 1) + ' reverted to song default');
+  };
+  $('btnInstResetAll').onclick = () => clearAllOverrides(false);
+  $('instCatFilter').onchange = () => renderInstPresets();
+  $('instSearch').oninput = () => renderInstPresets();
+
   let lastFrame = performance.now();
+  let lastInstTableSync = 0;
   function frame(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000);
     lastFrame = now;
@@ -435,6 +654,12 @@
       $('lcdBpm').textContent = Math.round(player.bpmAt(pos) * player.speed);
       $('lcdVoices').textContent = String(synth.activeCount(ctx.currentTime)).padStart(2, '0');
       if (!seeking) $('seek').value = Math.round((pos / player.song.duration) * 1000);
+
+      // Periodically keep Instruments window table updated during playback if visible
+      if (now - lastInstTableSync > 350 && !$('dlgInst').classList.contains('hidden')) {
+        lastInstTableSync = now;
+        renderInstChTable();
+      }
     }
     requestAnimationFrame(frame);
   }
@@ -461,6 +686,7 @@
   }
   bindSlider('vol', 'vol', (v) => v, (v) => synth && synth.setVolume(v / 100));
   bindSlider('rev', 'rev', (v) => v, (v) => synth && synth.setReverb(v / 100));
+  bindSlider('comp', 'comp', (v) => v + '%', (v) => synth && synth.setCompressor(v / 100));
   bindSlider('spd', 'spd', (v) => v + '%', (v) => player && player.setSpeed(v / 100));
   bindSlider('key', 'key', (v) => (v > 0 ? '+' : '') + v, (v) => {
     if (!synth) return;
@@ -482,7 +708,7 @@
   $('btnRew').onclick = () => nudge(-5);
   $('btnFwd').onclick = () => nudge(5);
   $('btnPrev').onclick = () => { if (player && player.position > 3) player.seek(0); else select(nextIndex(-1), true); };
-  $('btnNext').onclick = select(nextIndex(1), true);
+  $('btnNext').onclick = () => select(nextIndex(1), true);
   $('btnOpen').onclick = openMidi;
   $('btnAdd').onclick = openMidi;
   $('btnSf').onclick = openSf;
@@ -509,6 +735,7 @@
     $('lcdLen').textContent = '--:--';
   };
   $('btnAbout').onclick = () => $('about').classList.remove('hidden');
+  $('aboutClose').onclick = () => $('about').classList.add('hidden');
   $('aboutOk').onclick = () => $('about').classList.add('hidden');
 
   document.addEventListener('keydown', (e) => {
@@ -518,6 +745,14 @@
     else if (e.key === 'ArrowLeft' && e.ctrlKey) nudge(-5);
     else if (e.key === 'ArrowRight' && e.ctrlKey) nudge(5);
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') { e.preventDefault(); openMidi(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      if ($('dlgInst').classList.contains('hidden')) openInstWindow(); else closeInstWindow();
+    }
+    else if (e.key === 'Escape') {
+      closeInstWindow();
+      $('about').classList.add('hidden');
+    }
     else if (e.key === 'Delete') $('btnRemove').click();
   });
 
