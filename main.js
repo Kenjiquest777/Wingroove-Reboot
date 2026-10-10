@@ -1,8 +1,9 @@
 'use strict';
 /* WinGroove Reboot - Electron main process */
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
+const fsSync = require('fs');
 
 const OPENABLE = /\.(midi?|rmi|kar|sf2)$/i;
 const MIDI_FILTER = { name: 'MIDI Files', extensions: ['mid', 'midi', 'rmi', 'kar'] };
@@ -13,6 +14,37 @@ let rendererReady = false;
 const pending = [];
 
 const argFiles = (argv) => argv.slice(1).filter((a) => !a.startsWith('-') && OPENABLE.test(a));
+
+function getSoundfontsDir() {
+  const candidates = [
+    path.join(path.dirname(app.getPath('exe')), 'soundfonts'),
+    path.join(process.resourcesPath, 'soundfonts'),
+    path.join(__dirname, 'soundfonts'),
+    path.join(__dirname, 'renderer', 'soundfonts'),
+  ];
+  for (const c of candidates) {
+    try {
+      if (fsSync.existsSync(c)) return c;
+    } catch (_) {}
+  }
+  return path.join(__dirname, 'soundfonts');
+}
+
+async function findDefaultSoundfont() {
+  const candidates = [
+    path.join(path.dirname(app.getPath('exe')), 'soundfonts', 'WinGroove.sf2'),
+    path.join(process.resourcesPath, 'soundfonts', 'WinGroove.sf2'),
+    path.join(__dirname, 'soundfonts', 'WinGroove.sf2'),
+    path.join(__dirname, 'renderer', 'soundfonts', 'WinGroove.sf2'),
+  ];
+  for (const c of candidates) {
+    try {
+      const buf = await fs.readFile(c);
+      if (buf && buf.length > 100) return new Uint8Array(buf);
+    } catch (_) {}
+  }
+  return null;
+}
 
 async function readItems(paths) {
   const out = [];
@@ -77,21 +109,28 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     ipcMain.handle('wg:default-sf', async () => {
+      return await findDefaultSoundfont();
+    });
+
+    ipcMain.handle('wg:open-sf-folder', async () => {
+      const dir = getSoundfontsDir();
       try {
-        const buf = await fs.readFile(path.join(__dirname, 'renderer', 'soundfonts', 'WinGroove.sf2'));
-        return new Uint8Array(buf);
-      } catch (_) {
-        return null;
-      }
+        await fs.mkdir(dir, { recursive: true });
+      } catch (_) {}
+      return shell.openPath(dir);
     });
 
     ipcMain.handle('wg:open', async (_e, kind) => {
       const isSf = kind === 'sf2';
-      const res = await dialog.showOpenDialog(win, {
+      const opts = {
         title: isSf ? 'Load SoundFont' : 'Open MIDI Files',
         properties: isSf ? ['openFile'] : ['openFile', 'multiSelections'],
         filters: [isSf ? SF_FILTER : MIDI_FILTER, { name: 'All Files', extensions: ['*'] }],
-      });
+      };
+      if (isSf) {
+        opts.defaultPath = getSoundfontsDir();
+      }
+      const res = await dialog.showOpenDialog(win, opts);
       if (res.canceled) return [];
       return readItems(res.filePaths);
     });
