@@ -17,6 +17,7 @@
 
   <div class="menubar">
     <button class="menu" id="btnOpen" title="Open MIDI files (Ctrl+O)"><u>O</u>pen</button>
+    <button class="menu" id="btnInst" title="Open WinGroove Instruments Window (Ctrl+I)"><u>I</u>nstruments</button>
     <button class="menu" id="btnSf" title="Load a .sf2 SoundFont"><u>S</u>oundFont</button>
     <button class="menu" id="btnSfFolder" title="Open the SoundFonts folder in File Explorer"><u>F</u>older</button>
     <button class="menu" id="btnWav" title="Render current song to WAV">Save <u>W</u>AV</button>
@@ -50,6 +51,7 @@
   <div class="panel sliders">
     <label>Volume<input type="range" id="vol" min="0" max="150" value="80"><span id="volV">80</span></label>
     <label>Reverb<input type="range" id="rev" min="0" max="100" value="60"><span id="revV">60</span></label>
+    <label>Leveling<input type="range" id="comp" min="0" max="100" value="50"><span id="compV">50%</span></label>
     <label>Tempo<input type="range" id="spd" min="50" max="200" value="100"><span id="spdV">100%</span></label>
     <label>Key<input type="range" id="key" min="-12" max="12" value="0"><span id="keyV">0</span></label>
     <label>Polyphony<select id="poly"><option>24</option><option>32</option><option>48</option><option selected>64</option><option>128</option></select></label>
@@ -74,13 +76,60 @@
   <div class="status"><span id="status">Ready</span><span id="cpu"></span></div>
 </div>
 
+<!-- WinGroove Instruments Window -->
+<div class="dialog hidden" id="dlgInst">
+  <div class="win inst-win">
+    <div class="titlebar">
+      <span class="ticon"></span>
+      <span class="ttext">WinGroove - Instruments</span>
+      <button class="win-close" id="instClose" title="Close">&#10005;</button>
+    </div>
+    <div class="inst-body">
+      <div class="inst-pane-left">
+        <div class="inst-pane-hdr">
+          <span>Channels (1 - 16)</span>
+          <button class="btn tiny" id="btnInstResetAll" title="Reset all channels to default">Reset All</button>
+        </div>
+        <div class="inst-ch-table" id="instChTable"></div>
+      </div>
+      <div class="inst-pane-right">
+        <div class="inst-pane-hdr">
+          <span id="instTargetChTitle">Target: Channel 1</span>
+          <button class="btn tiny" id="btnInstResetSelected" title="Revert selected channel to song default">Revert Ch</button>
+        </div>
+        <div class="inst-filter-bar">
+          <select id="instCatFilter" class="inst-cat-sel"></select>
+          <input type="text" id="instSearch" placeholder="Search instruments..." class="inst-search-input">
+        </div>
+        <div class="inst-listbox" id="instListbox"></div>
+        <div class="inst-actions">
+          <button class="btn small" id="btnInstAudition" title="Audition this instrument">Audition</button>
+          <select id="instAuditionKey" class="inst-key-sel">
+            <option value="48">C3</option>
+            <option value="60" selected>C4</option>
+            <option value="72">C5</option>
+          </select>
+          <button class="btn small wide" id="btnInstAssign" title="Assign selected instrument to channel">Assign</button>
+        </div>
+      </div>
+    </div>
+    <div class="inst-statusbar">
+      <span id="instStatus">Select a channel and double-click an instrument to assign</span>
+    </div>
+  </div>
+</div>
+
 <div class="dialog hidden" id="about">
   <div class="win small-win">
-    <div class="titlebar"><span class="ttext">About WinGroove Reboot</span></div>
+    <div class="titlebar">
+      <span class="ticon"></span>
+      <span class="ttext">About WinGroove Reboot</span>
+      <button class="win-close" id="aboutClose" title="Close">&#10005;</button>
+    </div>
     <div class="about-body">
       <p><b>WinGroove Reboot</b> v1.0.0</p>
       <p>A from-scratch tribute to the classic WinGroove software wavetable MIDI player for Windows 95/98.</p>
-      <p>Engine: SoundFont 2 synth on Web Audio with reverb, compressor, 16 channels, WAV export.</p>
+      <p>Features: Echoing software reverb, dynamic sound leveler/compressor, 16-channel live instrument window, and offline WAV rendering.</p>
       <p>Put a file named <code>WinGroove.sf2</code> in <code>soundfonts/</code> to use it as the default bank.</p>
       <p style="text-align:right"><button class="btn" id="aboutOk">OK</button></p>
     </div>
