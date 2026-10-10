@@ -1,24 +1,18 @@
 {
   "name": "wingroove-reboot",
-  "productName": "WinGroove Reboot",
   "version": "1.0.0",
   "description": "A modern remake of the classic WinGroove software-wavetable MIDI player, using the WinGroove SoundFont.",
   "main": "main.js",
-  "author": {
-    "name": "Kenjiquest777",
-    "email": "kenjiquest777@users.noreply.github.com"
-  },
-  "license": "MIT",
   "homepage": "https://github.com/Kenjiquest777/Wingroove-Reboot",
   "scripts": {
-    "postinstall": "node scripts/fetch-soundfont.js --soft",
-    "fetch-soundfont": "node scripts/fetch-soundfont.js",
     "start": "electron .",
-    "web": "npx --yes http-server renderer -p 8080 -c-1",
+    "fetch-soundfont": "node scripts/fetch-soundfont.js",
+    "postinstall": "node scripts/fetch-soundfont.js --soft",
     "dist": "electron-builder --publish never",
     "dist:win": "electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac --publish never",
-    "dist:linux": "electron-builder --linux --publish never"
+    "dist:linux": "electron-builder --linux --publish never",
+    "web": "npx --yes http-server renderer -p 8080 -c-1"
   },
   "devDependencies": {
     "electron": "^33.2.1",
@@ -35,20 +29,41 @@
       "main.js",
       "preload.js",
       "renderer/**/*",
+      "soundfonts/**/*",
       "package.json"
     ],
-    "fileAssociations": [
+    "extraResources": [
       {
-        "ext": ["mid", "midi", "rmi", "kar"],
-        "name": "MIDI Sequence",
-        "description": "Standard MIDI File",
-        "role": "Viewer"
+        "from": "soundfonts",
+        "to": "soundfonts",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "soundfonts",
+        "to": "soundfonts",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
@@ -61,16 +76,46 @@
       "artifactName": "WinGroove-Reboot-${version}-portable.${ext}"
     },
     "mac": {
+      "category": "public.app-category.music",
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
-      ],
-      "category": "public.app-category.music"
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     },
     "linux": {
+      "category": "Audio",
       "target": [
-        { "target": "AppImage", "arch": ["x64"] }
-      ],
-      "category": "Audio"
-    }
-  }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "mid",
+          "midi",
+          "rmi",
+          "kar"
+        ],
+        "name": "MIDI Sequence",
+        "description": "Standard MIDI File",
+        "role": "Viewer"
+      }
+    ]
+  },
+  "productName": "WinGroove Reboot",
+  "author": {
+    "name": "Kenjiquest777",
+    "email": "kenjiquest777@users.noreply.github.com"
+  },
+  "license": "MIT"
 }
