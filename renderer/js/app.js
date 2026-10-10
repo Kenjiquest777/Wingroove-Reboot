@@ -482,10 +482,14 @@
   $('btnRew').onclick = () => nudge(-5);
   $('btnFwd').onclick = () => nudge(5);
   $('btnPrev').onclick = () => { if (player && player.position > 3) player.seek(0); else select(nextIndex(-1), true); };
-  $('btnNext').onclick = () => select(nextIndex(1), true);
+  $('btnNext').onclick = select(nextIndex(1), true);
   $('btnOpen').onclick = openMidi;
   $('btnAdd').onclick = openMidi;
   $('btnSf').onclick = openSf;
+  $('btnSfFolder').onclick = () => {
+    if (native && native.openSoundfontsFolder) native.openSoundfontsFolder();
+    else status('SoundFonts folder: soundfonts/ in your app directory.');
+  };
   $('btnWav').onclick = saveWav;
   $('btnResetCh').onclick = () => clearAllOverrides(false);
   $('btnRemove').onclick = () => {
