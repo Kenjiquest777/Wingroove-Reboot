@@ -1,7 +1,7 @@
 /* WinGroove Reboot - Web Audio SoundFont synthesizer
  * Voice chain: BufferSource -> [lowpass] -> envelope -> panner -> channel gain -> bus
- * Bus -> compressor -> master. Channel sends feed a shared convolution reverb.
- * WinGroove itself shipped with a software reverb and a compressor, so both are here.
+ * Software Reverb: Stereo multi-tap echo + diffuse tail with master send control.
+ * Sound Leveler: Dynamic range compressor with automatic makeup gain.
  */
 (function (root) {
   'use strict';
@@ -9,13 +9,50 @@
   const tc = (x) => Math.pow(2, x / 1200); // timecents -> seconds
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+  /* Vintage software reverb impulse response:
+   * Combines discrete stereo early echo taps with a decaying diffuse tail.
+   */
   function makeImpulse(ctx, seconds, decay) {
     const rate = ctx.sampleRate;
     const len = Math.max(1, Math.floor(rate * seconds));
     const buf = ctx.createBuffer(2, len, rate);
-    for (let c = 0; c < 2; c++) {
-      const d = buf.getChannelData(c);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    const left = buf.getChannelData(0);
+    const right = buf.getChannelData(1);
+
+    // Discrete early echo taps (time in seconds, gain, pan: -1 left .. +1 right)
+    const taps = [
+      { t: 0.032, g: 0.55, pan: -0.7 },
+      { t: 0.062, g: 0.45, pan: 0.7 },
+      { t: 0.098, g: 0.40, pan: -0.5 },
+      { t: 0.145, g: 0.35, pan: 0.6 },
+      { t: 0.205, g: 0.28, pan: -0.3 },
+      { t: 0.275, g: 0.24, pan: 0.4 },
+      { t: 0.355, g: 0.18, pan: 0.0 },
+      { t: 0.445, g: 0.14, pan: -0.4 },
+    ];
+
+    for (const tap of taps) {
+      const idx = Math.floor(tap.t * rate);
+      if (idx < len) {
+        const lg = tap.g * (0.5 - tap.pan * 0.5);
+        const rg = tap.g * (0.5 + tap.pan * 0.5);
+        left[idx] += lg;
+        right[idx] += rg;
+      }
+    }
+
+    // Dense decaying diffuse body with subtle high-frequency damping
+    let lpL = 0;
+    let lpR = 0;
+    for (let i = 0; i < len; i++) {
+      const progress = i / len;
+      const env = Math.pow(1 - progress, decay);
+      const nL = (Math.random() * 2 - 1) * env * 0.65;
+      const nR = (Math.random() * 2 - 1) * env * 0.65;
+      lpL += (nL - lpL) * 0.6;
+      lpR += (nR - lpR) * 0.6;
+      left[i] += lpL;
+      right[i] += lpR;
     }
     return buf;
   }
@@ -31,34 +68,49 @@
       this.transpose = opts.transpose || 0;
       this.onNote = null;
 
+      // Master output stage
       this.out = ctx.createGain();
       this.out.gain.value = opts.volume == null ? 0.8 : opts.volume;
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -10;
-      comp.knee.value = 10;
-      comp.ratio.value = 4;
-      comp.attack.value = 0.003;
-      comp.release.value = 0.25;
+
+      // Dynamic Compressor / Sound Leveling stage
+      this.comp = ctx.createDynamicsCompressor();
+      this.compGain = ctx.createGain();
+      this.levelingAmount = opts.leveling == null ? 0.5 : opts.leveling;
+      this.applyCompressor(this.levelingAmount, 0);
+
+      // Main summing bus
       this.bus = ctx.createGain();
-      this.bus.gain.value = 0.5; // headroom for 16 channels
-      this.bus.connect(comp);
-      comp.connect(this.out);
+      this.bus.gain.value = 0.55;
+
+      this.bus.connect(this.comp);
+      this.comp.connect(this.compGain);
+      this.compGain.connect(this.out);
       this.out.connect(ctx.destination);
 
+      // Software Reverb & Echo stage
+      this.reverbSendBus = ctx.createGain();
+      this.reverbSendBus.gain.value = 1.0;
+
       this.reverb = ctx.createConvolver();
-      this.reverb.buffer = makeImpulse(ctx, 2.2, 3.5);
+      this.reverb.normalize = false;
+      this.reverb.buffer = makeImpulse(ctx, 2.4, 2.8);
+
       this.reverbLevel = ctx.createGain();
-      this.reverbLevel.gain.value = opts.reverb == null ? 0.6 : opts.reverb;
+      this.reverbMaster = opts.reverb == null ? 0.6 : opts.reverb;
+      this.reverbLevel.gain.value = this.reverbMaster * 1.5;
+
+      this.reverbSendBus.connect(this.reverb);
       this.reverb.connect(this.reverbLevel);
       this.reverbLevel.connect(this.bus);
 
+      // 16 MIDI Channels
       this.channels = [];
       for (let i = 0; i < 16; i++) {
         const gain = ctx.createGain();
         const send = ctx.createGain();
         gain.connect(this.bus);
         gain.connect(send);
-        send.connect(this.reverb);
+        send.connect(this.reverbSendBus);
         const c = { index: i, gain, send, muted: false, override: null };
         this.channels.push(c);
         this.resetChannel(c, 0);
@@ -73,7 +125,43 @@
       for (const c of this.channels) c.preset = undefined;
     }
     setVolume(v) { this.out.gain.setTargetAtTime(v, this.ctx.currentTime, 0.02); }
-    setReverb(v) { this.reverbLevel.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); }
+
+    setReverb(v) {
+      this.reverbMaster = Math.max(0, v);
+      const t = this.ctx.currentTime;
+      this.reverbLevel.gain.setTargetAtTime(this.reverbMaster * 1.5, t, 0.03);
+      for (const c of this.channels) this.applySend(c, t);
+    }
+
+    setCompressor(amount) {
+      this.levelingAmount = clamp(amount, 0, 1);
+      this.applyCompressor(this.levelingAmount, this.ctx.currentTime);
+    }
+
+    applyCompressor(amount, t) {
+      const comp = this.comp;
+      const makeup = this.compGain;
+      if (!comp || !makeup) return;
+      if (amount <= 0.01) {
+        // Transparent bypass
+        comp.threshold.setTargetAtTime(0, t, 0.02);
+        comp.ratio.setTargetAtTime(1, t, 0.02);
+        makeup.gain.setTargetAtTime(1.0, t, 0.02);
+      } else {
+        // WinGroove sound leveling: brings up quiet passages and tames peaks
+        const thresh = -12 - amount * 24; // -12dB down to -36dB
+        const ratio = 2.5 + amount * 7.5; // 2.5:1 up to 10:1
+        const knee = 12 - amount * 4;
+        const makeupLevel = 1.0 + amount * 0.7; // Automatic makeup gain
+        comp.threshold.setTargetAtTime(thresh, t, 0.02);
+        comp.ratio.setTargetAtTime(ratio, t, 0.02);
+        comp.knee.setTargetAtTime(knee, t, 0.02);
+        comp.attack.setTargetAtTime(0.005, t, 0.02);
+        comp.release.setTargetAtTime(0.18, t, 0.02);
+        makeup.gain.setTargetAtTime(makeupLevel, t, 0.02);
+      }
+    }
+
     setPolyphony(n) { this.polyphony = n; }
     setMute(ch, m) {
       const c = this.channels[ch];
@@ -89,7 +177,6 @@
         c.override = { bank: +bank, program: +program };
       }
       c.preset = undefined;
-      // Cut any active sounding notes on this channel so new sound takes effect immediately
       if (this.ctx) {
         const now = this.ctx.currentTime;
         for (const v of this.voices) {
@@ -121,6 +208,27 @@
       return n;
     }
 
+    /* Audition a note for testing instruments in the instrument window */
+    auditionNote(bank, program, key = 60, vel = 100, duration = 0.8) {
+      if (!this.sf || !this.ctx) return;
+      const p = this.sf.find(bank, program);
+      if (!p) return;
+      const now = this.ctx.currentTime;
+      const k = clamp(key, 0, 127);
+      const v = clamp(vel, 1, 127);
+      for (const r of p.regions) {
+        if (k < r.keyLo || k > r.keyHi || v < r.velLo || v > r.velHi) continue;
+        const dummyChannel = { index: -1, pan: 64, bend: 0, bendRange: 2, gain: this.bus };
+        this.startVoice(dummyChannel, k, k, v, now, r);
+      }
+      setTimeout(() => {
+        const t = this.ctx.currentTime;
+        for (const voice of this.voices) {
+          if (voice.ch === -1 && !voice.released) this.releaseVoice(voice, t, false);
+        }
+      }, Math.max(100, Math.floor(duration * 1000)));
+    }
+
     /* ---------- channel state ---------- */
     resetChannel(c, t) {
       c.program = 0;
@@ -136,13 +244,23 @@
       c.reverb = 40;
       c.preset = undefined;
       this.applyGain(c, t);
-      c.send.gain.setValueAtTime(c.reverb / 127, t);
+      this.applySend(c, t);
     }
     resetAll(t) { for (const c of this.channels) this.resetChannel(c, t); }
+
     applyGain(c, t) {
       const v = c.muted ? 0 : Math.pow(c.volume / 127, 2) * Math.pow(c.expression / 127, 2);
       c.gain.gain.setTargetAtTime(v, t, 0.008);
     }
+
+    applySend(c, t) {
+      // Vintage software synth send: combine channel CC91 send with a solid minimum baseline
+      // so master reverb slider always yields audible reverberation/echo even if MIDI sends CC91=0
+      const ccSend = c.reverb / 127;
+      const effective = (0.35 + 0.65 * ccSend) * this.reverbMaster;
+      c.send.gain.setTargetAtTime(effective, t, 0.02);
+    }
+
     presetFor(c) {
       if (c.override) {
         return this.sf ? this.sf.find(c.override.bank, c.override.program) : null;
@@ -330,7 +448,10 @@
           c.sustain = val >= 64;
           if (!c.sustain) for (const v of this.voices) if (v.ch === ch && v.sustained && !v.released) this.releaseVoice(v, t);
           break;
-        case 91: c.reverb = val; c.send.gain.setTargetAtTime(val / 127, t, 0.02); break;
+        case 91:
+          c.reverb = val;
+          this.applySend(c, t);
+          break;
         case 100: c.rpnLsb = val; break;
         case 101: c.rpnMsb = val; break;
         case 120: for (const v of this.voices) if (v.ch === ch) this.releaseVoice(v, t, true); break;
