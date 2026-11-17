@@ -1,186 +1,276 @@
-/* WinGroove Reboot - Windows 95/98 look */
+/* WinGroove Reboot - Classic Win95/98 UI & Standalone Instruments Styling */
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
 body {
   background: #008080;
   font: 11px "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Geneva, sans-serif;
   color: #000;
-  display: flex; align-items: stretch; justify-content: center;
+  display: flex;
+  flex-direction: column;
   user-select: none;
 }
 button, select, input { font: inherit; }
+
+/* Windows 95/98 Window Frame */
 .win {
-  background: #c0c0c0; margin: 8px; width: 100%; max-width: 760px;
-  display: flex; flex-direction: column; padding: 3px;
+  background: #c0c0c0;
+  display: flex; flex-direction: column;
+  padding: 3px;
   border: 2px solid; border-color: #dfdfdf #000 #000 #dfdfdf;
   box-shadow: inset 1px 1px #fff, inset -1px -1px #808080;
+  height: 100%;
 }
+.wg-main-window .win { margin: 0; width: 100%; height: 100%; border-radius: 0; }
+
 .titlebar {
   background: linear-gradient(90deg, #000080, #1084d0); color: #fff; font-weight: bold;
-  padding: 3px 4px; display: flex; align-items: center; gap: 6px;
+  padding: 3px 4px; display: flex; align-items: center; justify-content: space-between;
+  cursor: default;
 }
-.ticon { width: 14px; height: 14px; background: radial-gradient(circle at 35% 35%, #ff0 0 30%, #c80 31% 60%, transparent 61%), #008; border: 1px solid #fff; }
-.ttext { flex: 1; }
-.tsf { font-weight: normal; opacity: .85; max-width: 45%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.title-left { display: flex; align-items: center; gap: 6px; }
+.system-menu-icon {
+  width: 14px; height: 14px;
+  background: radial-gradient(circle at 35% 35%, #ff0 0 30%, #c80 31% 60%, transparent 61%), #008;
+  border: 1px solid #fff;
+}
+.window-title { font-size: 11px; letter-spacing: 0.3px; }
 
-.win-close {
+.title-controls { display: flex; gap: 2px; }
+.win-btn {
   background: #c0c0c0; color: #000; font-size: 10px; font-weight: bold;
-  width: 16px; height: 14px; border: 2px solid; border-color: #fff #000 #000 #fff;
+  width: 16px; height: 14px; border: 1px solid; border-color: #fff #000 #000 #fff;
   box-shadow: inset -1px -1px #808080, inset 1px 1px #dfdfdf;
   cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 1;
 }
-.win-close:active { border-color: #000 #fff #fff #000; box-shadow: inset 1px 1px #808080; }
+.win-btn:active { border-color: #000 #fff #fff #000; box-shadow: inset 1px 1px #808080; }
+.win-btn-pin.active { background: #000080; color: #fff; }
 
-.menubar { display: flex; gap: 2px; padding: 2px 0 4px; }
-.menu { background: none; border: 1px solid transparent; padding: 2px 8px; cursor: pointer; }
-.menu:hover { border-color: #fff #808080 #808080 #fff; }
-.panel { margin: 3px 2px; }
-.btn {
-  background: #c0c0c0; min-width: 34px; height: 26px; padding: 0 8px; cursor: pointer;
-  border: 2px solid; border-color: #fff #000 #000 #fff;
-  box-shadow: inset -1px -1px #808080, inset 1px 1px #dfdfdf;
+/* Player Body Layout */
+.player-body {
+  display: flex; gap: 4px; padding: 4px; flex: 1; background: #c0c0c0;
 }
-.btn:active, .btn.on { border-color: #000 #fff #fff #000; box-shadow: inset 1px 1px #808080; }
-.btn.wide { min-width: 60px; }
-.btn.small { height: 22px; }
-.btn.tiny { height: 18px; min-width: 0; font-size: 10px; padding: 0 6px; line-height: 14px; margin-left: 6px; }
-.btn:focus-visible { outline: 1px dotted #000; outline-offset: -5px; }
-.lcd-wrap { border: 2px solid; border-color: #808080 #fff #fff #808080; padding: 4px; background: #c0c0c0; }
-.lcd {
-  background: #0a1a0a; color: #39ff6a; font-family: "Lucida Console", "Courier New", monospace;
-  padding: 6px 10px; text-shadow: 0 0 4px #1f9; border: 1px solid #000;
-}
-.lcd-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.lcd .big { font-size: 30px; letter-spacing: 2px; }
-.lcd-right { display: flex; gap: 14px; font-size: 12px; }
-.lcd .small { font-size: 12px; margin-top: 2px; }
-.marquee { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; }
-.seek { width: 100%; margin-top: 6px; }
-.transport { display: flex; gap: 4px; flex-wrap: wrap; }
-.transport .toggle { margin-left: auto; }
-.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 4px 10px; }
-.sliders label { display: flex; align-items: center; gap: 4px; }
-.sliders input[type=range] { flex: 1; min-width: 45px; }
-.sliders span { width: 34px; text-align: right; }
-fieldset.group { border: 2px groove #fff; padding: 4px 6px 6px; }
-legend { padding: 0 3px; display: flex; align-items: center; }
-.meters { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; }
-.ch { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.ch .num {
-  font-size: 10px; font-weight: bold; cursor: pointer; padding: 0 2px;
-  border: 1px solid transparent; border-radius: 1px;
-}
-.ch .num:hover { border-color: #808080 #fff #fff #808080; }
-.ch .bar {
-  width: 100%; height: 56px; background: #000; position: relative;
-  border: 1px solid; border-color: #808080 #fff #fff #808080; overflow: hidden;
-  cursor: pointer;
-}
-.ch .fill {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 0%;
-  background: linear-gradient(to top, #0c0 0 60%, #ff0 60% 85%, #f00 85%);
-}
-.ch .peak { position: absolute; left: 0; right: 0; height: 2px; background: #fff; bottom: 0; }
-.ch .pan { width: 100%; height: 4px; background: #808080; position: relative; }
-.ch .pan i { position: absolute; top: 0; width: 3px; height: 4px; background: #000080; left: 50%; }
-.ch.muted .bar { opacity: .35; }
-.ch.muted .num { color: #808080; text-decoration: line-through; }
-
-.ch .inst-sel {
-  width: 100%; height: 18px; font-size: 8px; padding: 0 1px;
-  background: #fff; color: #000;
-  border: 1px solid; border-color: #808080 #fff #fff #808080;
-  box-shadow: inset 1px 1px #000;
-  cursor: pointer; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;
-  font-family: Tahoma, "MS Sans Serif", Geneva, sans-serif;
-  outline: none;
-}
-.ch .inst-sel:focus { outline: 1px dotted #000; }
-.ch .inst-sel.override {
-  background: #ffffe0; color: #000080; font-weight: bold;
-  border-color: #000080 #dfdfdf #dfdfdf #000080;
+.left-section {
+  width: 250px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;
 }
 
-.grow { flex: 1; display: flex; flex-direction: column; min-height: 140px; }
-.playlist {
-  flex: 1; margin: 0; padding: 2px 2px 2px 34px; background: #fff; overflow-y: auto; min-height: 90px;
-  border: 2px solid; border-color: #808080 #fff #fff #808080;
+/* File & Song Selector */
+.file-cluster { display: flex; gap: 4px; }
+.wg-btn {
+  background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  box-shadow: inset 1px 1px #dfdfdf, inset -1px -1px #000;
+  padding: 2px 6px; cursor: pointer; text-align: center;
 }
-.playlist li { padding: 1px 4px; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.playlist li.sel { background: #000080; color: #fff; }
-.playlist li.cur { font-weight: bold; }
-.playlist li.err { color: #a00; }
-.plbar { display: flex; gap: 4px; margin-top: 4px; }
-.status {
-  display: flex; justify-content: space-between; margin-top: 3px; padding: 2px 4px;
-  border: 1px solid; border-color: #808080 #fff #fff #808080;
+.wg-btn:active { border-color: #808080 #fff #fff #808080; box-shadow: inset 1px 1px #000; padding: 3px 5px 1px 7px; }
+.file-btn { font-weight: bold; min-width: 50px; }
+
+.sunken-box {
+  background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080;
+  box-shadow: inset 1px 1px #000, inset -1px -1px #dfdfdf;
+  display: flex; align-items: center; padding: 0 4px;
 }
-.dialog { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.small-win { max-width: 380px; }
-.about-body { padding: 10px; line-height: 1.4; }
-.hidden { display: none !important; }
-.dropzone {
-  position: fixed; inset: 0; background: rgba(0,0,128,.55); color: #fff; font-size: 24px;
-  display: flex; align-items: center; justify-content: center; pointer-events: none;
+.song-combo-box { flex: 1; justify-content: space-between; overflow: hidden; }
+.current-song-text { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.combo-arrow-btn {
+  background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff;
+  width: 14px; height: 14px; font-size: 8px; padding: 0; cursor: pointer;
 }
 
-/* WinGroove Instruments Window */
-.inst-win { max-width: 680px; height: 480px; width: 94%; }
-.inst-body { display: flex; flex: 1; gap: 6px; padding: 4px; overflow: hidden; min-height: 0; }
-.inst-pane-left {
-  width: 250px; display: flex; flex-direction: column; border: 2px groove #fff;
-  padding: 4px; background: #c0c0c0; min-height: 0;
+/* Classic LCD Display */
+.display-cluster {
+  background: #000; border: 2px solid; border-color: #808080 #fff #fff #808080;
+  padding: 4px; display: flex; flex-direction: column; gap: 4px;
 }
-.inst-pane-right {
-  flex: 1; display: flex; flex-direction: column; border: 2px groove #fff;
-  padding: 4px; background: #c0c0c0; min-height: 0;
+.sunken-display {
+  display: flex; align-items: baseline; justify-content: space-between; color: #00ff00; font-family: monospace;
 }
-.inst-pane-hdr {
-  display: flex; justify-content: space-between; align-items: center;
-  font-weight: bold; margin-bottom: 4px; padding-bottom: 2px;
+.lcd-label { font-size: 9px; color: #00aa00; font-weight: bold; }
+.lcd-time { font-size: 16px; font-weight: bold; }
+.lcd-total { font-size: 11px; color: #00aa00; }
+
+.seek-bar-wrap { width: 100%; }
+.classic-slider { width: 100%; accent-color: #000080; cursor: pointer; }
+
+/* Transport Controls */
+.transport-cluster { display: flex; flex-direction: column; gap: 3px; }
+.transport-row { display: flex; gap: 2px; }
+.transport-btn { flex: 1; height: 26px; font-size: 11px; font-weight: bold; }
+.transport-row-sub { display: flex; gap: 2px; }
+.sub-btn { flex: 1; height: 20px; font-size: 10px; }
+
+/* Key & Tempo Steppers */
+.steppers-cluster {
+  display: flex; gap: 4px; align-items: center; background: #c0c0c0;
+  border: 1px solid #808080; padding: 4px;
 }
-.inst-ch-table {
+.stepper-box { display: flex; align-items: center; gap: 2px; }
+.stepper-title { font-size: 9px; font-weight: bold; width: 34px; }
+.sunken-digit-box {
+  background: #000; color: #00ff00; font-family: monospace; font-size: 12px;
+  width: 44px; height: 20px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid #808080;
+}
+.stepper-arrows { display: flex; flex-direction: column; gap: 1px; }
+.stepper-btn {
+  background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff;
+  width: 14px; height: 9px; font-size: 6px; line-height: 1; padding: 0; cursor: pointer;
+}
+.reset-btn { height: 22px; font-size: 10px; padding: 0 4px; margin-left: auto; }
+
+/* Extra Windows Cluster */
+.extra-buttons-cluster { display: flex; gap: 2px; }
+.feature-btn { flex: 1; height: 22px; font-size: 10px; }
+
+/* Mixer Section: Master + 16 Channels */
+.mixer-section {
+  flex: 1; display: flex; gap: 2px; background: #c0c0c0;
+  border: 2px solid; border-color: #808080 #fff #fff #808080; padding: 4px;
+}
+.master-strip {
+  width: 48px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border-right: 1px solid #808080; padding-right: 4px;
+}
+.strip-header { font-size: 9px; font-weight: bold; text-align: center; }
+
+/* Dual LED Meters */
+.master-meters-dual { display: flex; gap: 2px; height: 140px; background: #000; padding: 2px; width: 28px; }
+.led-meter-col { flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 1px; }
+.led-bar { height: 8px; width: 100%; background: #222; }
+.led-bar.green.active { background: #00ff00; box-shadow: 0 0 2px #00ff00; }
+.led-bar.yellow.active { background: #ffff00; box-shadow: 0 0 2px #ffff00; }
+.led-bar.red.active { background: #ff0000; box-shadow: 0 0 2px #ff0000; }
+
+.master-controls { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.switch-wrap { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.row-label { font-size: 8px; font-weight: bold; }
+.wg-led-switch {
+  width: 14px; height: 14px; border-radius: 50%; border: 1px solid #000;
+  background: #800000; cursor: pointer;
+}
+.wg-led-switch.active { background: #00ff00; box-shadow: 0 0 4px #00ff00; }
+
+.fader-wrap { height: 100px; display: flex; align-items: center; }
+.classic-vertical-fader {
+  writing-mode: bt-lr; appearance: slider-vertical; width: 16px; height: 100px;
+}
+
+/* 16 MIDI Channels Grid */
+.channels-container { flex: 1; overflow-x: auto; display: flex; }
+.channels-strip-row { display: flex; gap: 2px; flex: 1; }
+
+.ch-strip {
+  flex: 1; min-width: 26px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border-right: 1px solid #dfdfdf; padding: 0 2px;
+}
+.ch-header { font-size: 9px; font-weight: bold; text-align: center; color: #000; }
+
+.ch-meter-box { width: 18px; height: 140px; background: #000; padding: 2px; display: flex; flex-direction: column; }
+.ch-pan-tick { height: 3px; background: #ffff00; width: 100%; margin-top: 2px; }
+
+.ch-auto-switch {
+  width: 12px; height: 12px; border-radius: 50%; border: 1px solid #000;
+  background: #ff8800; cursor: pointer;
+}
+.ch-auto-switch.auto-on { background: #00ff00; box-shadow: 0 0 3px #00ff00; }
+
+.ch-on-switch {
+  width: 12px; height: 12px; border-radius: 50%; border: 1px solid #000;
+  background: #ff0000; cursor: pointer;
+}
+.ch-on-switch.on-active { background: #00ff00; box-shadow: 0 0 3px #00ff00; }
+
+/* Right Labels Column */
+.mixer-labels-col {
+  width: 44px; display: flex; flex-direction: column; justify-content: space-around;
+  font-size: 8px; font-weight: bold; text-align: center; border-left: 1px solid #808080; padding-left: 2px;
+}
+
+/* Collapsible Playlist Drawer */
+.playlist-drawer {
+  background: #c0c0c0; border-t: 2px solid #808080; display: none; flex-direction: column; height: 160px; padding: 4px;
+}
+.playlist-drawer.open { display: flex; }
+.drawer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.drawer-title { font-size: 11px; font-weight: bold; }
+.drawer-tools { display: flex; gap: 4px; }
+.queue-list {
   flex: 1; background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080;
-  overflow-y: auto; overflow-x: hidden; min-height: 0;
+  overflow-y: auto; padding: 2px;
 }
-.inst-ch-row {
-  display: flex; align-items: center; padding: 2px 4px; cursor: pointer;
-  border-bottom: 1px solid #ececec; gap: 4px;
-}
-.inst-ch-row:hover { background: #eef; }
-.inst-ch-row.selected { background: #000080; color: #fff; }
-.inst-ch-row .ch-idx { font-weight: bold; width: 44px; flex-shrink: 0; }
-.inst-ch-row .ch-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.inst-ch-row .ch-tag {
-  font-size: 9px; padding: 0 3px; border-radius: 2px; flex-shrink: 0;
-}
-.inst-ch-row.override .ch-tag { background: #ffffe0; color: #000080; border: 1px solid #808080; }
-.inst-ch-row.selected.override .ch-tag { background: #ffff80; color: #000080; }
+.queue-item { padding: 2px 4px; cursor: pointer; display: flex; justify-content: space-between; }
+.queue-item.active { background: #000080; color: #fff; }
 
-.inst-filter-bar { display: flex; gap: 4px; margin-bottom: 4px; }
-.inst-cat-sel {
-  width: 130px; height: 22px; font-size: 11px;
-  background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080;
+/* Status Bar */
+.statusbar {
+  display: flex; gap: 2px; padding: 2px 0 0; background: #c0c0c0;
 }
-.inst-search-input {
-  flex: 1; height: 22px; padding: 0 4px; font-size: 11px;
-  background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080;
+.status-cell {
+  background: #c0c0c0; border: 1px solid; border-color: #808080 #fff #fff #808080;
+  padding: 2px 4px; font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-.inst-listbox {
-  flex: 1; background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080;
-  overflow-y: auto; overflow-x: hidden; padding: 2px 0; min-height: 0;
+.cell-msg { flex: 1; }
+.cell-voices { width: 100px; text-align: center; }
+.cell-soundfont { width: 120px; text-align: right; }
+
+/* Standalone Attached Instruments Window Styling */
+.wg-inst-window { background: #c0c0c0; padding: 3px; display: flex; flex-direction: column; height: 100%; }
+.inst-body { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 4px; overflow: hidden; }
+
+.inst-grid-container { display: flex; gap: 6px; flex: 1; overflow-y: auto; }
+.inst-col { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+
+.inst-row {
+  display: flex; align-items: center; gap: 4px; background: #e0e0e0;
+  border: 1px solid #808080; padding: 2px 4px; height: 28px;
 }
-.inst-preset-item {
-  padding: 2px 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.inst-row.is-override { background: #ffffcc; border-color: #000080; }
+.inst-row.active-target { border: 2px solid #000080; }
+
+.inst-ch-badge {
+  background: #000080; color: #fff; font-weight: bold; font-size: 10px;
+  width: 22px; height: 20px; display: flex; align-items: center; justify-content: center;
+  border-radius: 2px;
 }
-.inst-preset-item:hover { background: #eef; }
-.inst-preset-item.selected { background: #000080; color: #fff; }
-.inst-actions { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
-.inst-key-sel {
-  height: 22px; width: 48px; font-size: 11px;
-  background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080;
+.inst-display-box {
+  flex: 1; background: #fff; border: 1px solid #808080; height: 22px;
+  display: flex; align-items: center; padding: 0 6px; cursor: pointer; overflow: hidden;
 }
-.inst-statusbar {
-  padding: 3px 6px; font-size: 10px; border-top: 1px solid #808080;
-  background: #c0c0c0; color: #222; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.inst-text { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #000; }
+
+.inst-spin-btns { display: flex; flex-direction: column; gap: 1px; }
+.inst-spin-up, .inst-spin-down {
+  background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff;
+  width: 14px; height: 10px; font-size: 7px; padding: 0; cursor: pointer; line-height: 1;
 }
+
+/* Instruments Drawer */
+.inst-drawer {
+  background: #c0c0c0; border: 2px solid #808080; padding: 4px; display: none; flex-direction: column; gap: 4px; height: 220px;
+}
+.inst-drawer.open { display: flex; }
+.drawer-listbox-wrap { flex: 1; background: #fff; border: 1px solid #808080; overflow-y: auto; }
+.inst-listbox { display: flex; flex-direction: column; }
+.drawer-preset-item {
+  display: flex; gap: 8px; padding: 3px 6px; cursor: pointer; font-size: 11px;
+}
+.drawer-preset-item:hover { background: #e0e0e0; }
+.drawer-preset-item.selected { background: #000080; color: #fff; }
+.preset-prog { width: 50px; font-weight: bold; opacity: 0.8; }
+.preset-name { flex: 1; }
+
+.drawer-footer { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.audition-cluster { display: flex; gap: 4px; align-items: center; }
+.drawer-actions { display: flex; gap: 4px; }
+.win98-btn { background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff; padding: 2px 8px; cursor: pointer; }
+
+/* Modals */
+.wg-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none;
+  align-items: center; justify-content: center; z-index: 9999;
+}
+.wg-modal-overlay.open { display: flex; }
+.modal-window { width: 380px; height: auto; }
+.modal-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.setup-group { border: 1px solid #808080; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+.group-title { font-weight: bold; font-size: 10px; margin-top: -12px; background: #c0c0c0; padding: 0 4px; width: fit-content; }
+.setup-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.modal-footer { display: flex; justify-content: flex-end; margin-top: 6px; }
