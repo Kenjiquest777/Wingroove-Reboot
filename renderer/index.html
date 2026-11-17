@@ -1,150 +1,216 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; connect-src 'self' blob: data:">
-<title>WinGroove Reboot</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <title>WinGroove Player</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body>
-<div class="win" id="app">
-  <div class="titlebar">
-    <span class="ticon"></span>
-    <span class="ttext">WinGroove Reboot</span>
-    <span class="tsf" id="sfName">no soundfont</span>
-  </div>
-
-  <div class="menubar">
-    <button class="menu" id="btnOpen" title="Open MIDI files (Ctrl+O)"><u>O</u>pen</button>
-    <button class="menu" id="btnInst" title="Open WinGroove Instruments Window (Ctrl+I)"><u>I</u>nstruments</button>
-    <button class="menu" id="btnSf" title="Load a .sf2 SoundFont"><u>S</u>oundFont</button>
-    <button class="menu" id="btnSfFolder" title="Open the SoundFonts folder in File Explorer"><u>F</u>older</button>
-    <button class="menu" id="btnWav" title="Render current song to WAV">Save <u>W</u>AV</button>
-    <button class="menu" id="btnAbout"><u>A</u>bout</button>
-  </div>
-
-  <div class="panel lcd-wrap">
-    <div class="lcd">
-      <div class="lcd-row">
-        <span id="lcdTime" class="big">00:00</span>
-        <span class="lcd-right">
-          <span>BPM <b id="lcdBpm">---</b></span>
-          <span>VOICE <b id="lcdVoices">00</b></span>
-        </span>
+<body class="wg-main-window">
+  <div class="win" id="mainWin">
+    <!-- WinGroove Classic Titlebar -->
+    <div class="titlebar draggable-header">
+      <div class="title-left">
+        <div class="system-menu-icon" id="sysMenuIcon" title="System Menu"></div>
+        <span class="window-title">WinGroove</span>
       </div>
-      <div class="lcd-row small"><span id="lcdTitle" class="marquee">Drop .mid files here</span><span id="lcdLen">--:--</span></div>
-    </div>
-    <input type="range" id="seek" min="0" max="1000" value="0" class="seek">
-  </div>
-
-  <div class="panel transport">
-    <button class="btn" id="btnPrev" title="Previous">&#9198;</button>
-    <button class="btn" id="btnRew" title="Back 5s">&#9194;</button>
-    <button class="btn wide" id="btnPlay" title="Play / Pause (Space)">&#9654;</button>
-    <button class="btn" id="btnStop" title="Stop">&#9632;</button>
-    <button class="btn" id="btnFwd" title="Forward 5s">&#9193;</button>
-    <button class="btn" id="btnNext" title="Next">&#9197;</button>
-    <button class="btn toggle" id="btnLoop" title="Repeat mode">REP: ALL</button>
-  </div>
-
-  <div class="panel sliders">
-    <label>Volume<input type="range" id="vol" min="0" max="150" value="80"><span id="volV">80</span></label>
-    <label>Reverb<input type="range" id="rev" min="0" max="100" value="60"><span id="revV">60</span></label>
-    <label>Leveling<input type="range" id="comp" min="0" max="100" value="50"><span id="compV">50%</span></label>
-    <label>Tempo<input type="range" id="spd" min="50" max="200" value="100"><span id="spdV">100%</span></label>
-    <label>Key<input type="range" id="key" min="-12" max="12" value="0"><span id="keyV">0</span></label>
-    <label>Polyphony<select id="poly"><option>24</option><option>32</option><option>48</option><option selected>64</option><option>128</option></select></label>
-  </div>
-
-  <fieldset class="panel group">
-    <legend>Channels <button class="btn tiny" id="btnResetCh" title="Revert all channel instrument overrides to song default">Reset</button></legend>
-    <div class="meters" id="meters"></div>
-  </fieldset>
-
-  <fieldset class="panel group grow">
-    <legend>Playlist</legend>
-    <ol class="playlist" id="playlist"></ol>
-    <div class="plbar">
-      <button class="btn small" id="btnAdd">Add...</button>
-      <button class="btn small" id="btnRemove">Remove</button>
-      <button class="btn small" id="btnClear">Clear</button>
-      <button class="btn small toggle" id="btnShuffle">Shuffle</button>
-    </div>
-  </fieldset>
-
-  <div class="status"><span id="status">Ready</span><span id="cpu"></span></div>
-</div>
-
-<!-- WinGroove Instruments Window -->
-<div class="dialog hidden" id="dlgInst">
-  <div class="win inst-win">
-    <div class="titlebar">
-      <span class="ticon"></span>
-      <span class="ttext">WinGroove - Instruments</span>
-      <button class="win-close" id="instClose" title="Close">&#10005;</button>
-    </div>
-    <div class="inst-body">
-      <div class="inst-pane-left">
-        <div class="inst-pane-hdr">
-          <span>Channels (1 - 16)</span>
-          <button class="btn tiny" id="btnInstResetAll" title="Reset all channels to default">Reset All</button>
-        </div>
-        <div class="inst-ch-table" id="instChTable"></div>
-      </div>
-      <div class="inst-pane-right">
-        <div class="inst-pane-hdr">
-          <span id="instTargetChTitle">Target: Channel 1</span>
-          <button class="btn tiny" id="btnInstResetSelected" title="Revert selected channel to song default">Revert Ch</button>
-        </div>
-        <div class="inst-filter-bar">
-          <select id="instCatFilter" class="inst-cat-sel"></select>
-          <input type="text" id="instSearch" placeholder="Search instruments..." class="inst-search-input">
-        </div>
-        <div class="inst-listbox" id="instListbox"></div>
-        <div class="inst-actions">
-          <button class="btn small" id="btnInstAudition" title="Audition this instrument">Audition</button>
-          <select id="instAuditionKey" class="inst-key-sel">
-            <option value="48">C3</option>
-            <option value="60" selected>C4</option>
-            <option value="72">C5</option>
-          </select>
-          <button class="btn small wide" id="btnInstAssign" title="Assign selected instrument to channel">Assign</button>
-        </div>
+      <div class="title-controls non-draggable">
+        <button id="btnHelp" class="win-btn" title="Help">?</button>
+        <button id="btnMinimize" class="win-btn" title="Minimize">_</button>
+        <button id="btnMaximize" class="win-btn" title="Maximize">□</button>
+        <button id="btnClose" class="win-btn win-btn-close" title="Close">✕</button>
       </div>
     </div>
-    <div class="inst-statusbar">
-      <span id="instStatus">Select a channel and double-click an instrument to assign</span>
+
+    <!-- Main Player Canvas -->
+    <div class="player-body">
+      <!-- Left Column: Controls, Display, Transpose, Tempo -->
+      <div class="left-section">
+        <!-- Top File Bar -->
+        <div class="file-cluster">
+          <button id="btnFile" class="wg-btn file-btn">File...</button>
+          <div class="sunken-box song-combo-box">
+            <span id="currentSongTitle" class="current-song-text">No File Loaded</span>
+            <button id="btnSongDropdown" class="combo-arrow-btn">▼</button>
+          </div>
+        </div>
+
+        <!-- Classic LCD / Time & Seek Bar -->
+        <div class="display-cluster">
+          <div class="sunken-display" id="timeDisplay">
+            <span class="lcd-label">TIME</span>
+            <span class="lcd-time" id="lblTime">00'00"</span>
+            <span class="lcd-total" id="lblTotalTime">/ 00'00"</span>
+          </div>
+          <div class="seek-bar-wrap">
+            <input type="range" id="seekSlider" class="classic-slider seek-slider" min="0" max="1000" value="0" step="1" />
+          </div>
+        </div>
+
+        <!-- Classic Transport Cluster -->
+        <div class="transport-cluster">
+          <div class="transport-row">
+            <button id="btnPlayPause" class="wg-btn transport-btn" title="Play / Pause">▶ / ❚❚</button>
+            <button id="btnRew" class="wg-btn transport-btn" title="Rewind">◀◀</button>
+            <button id="btnFF" class="wg-btn transport-btn" title="Fast Forward">▶▶</button>
+            <button id="btnRestart" class="wg-btn transport-btn" title="Restart">|◀</button>
+            <button id="btnStop" class="wg-btn transport-btn" title="Stop">■</button>
+          </div>
+          <div class="transport-row-sub">
+            <button id="btnPrevTrack" class="wg-btn sub-btn" title="Previous Track">◀ Prev</button>
+            <button id="btnNextTrack" class="wg-btn sub-btn" title="Next Track">Next ▶</button>
+            <button id="btnRepeat" class="wg-btn sub-btn" title="Toggle Repeat Mode">Rep: Off</button>
+          </div>
+        </div>
+
+        <!-- Key & Tempo Steppers -->
+        <div class="steppers-cluster">
+          <div class="stepper-box">
+            <span class="stepper-title">KEY</span>
+            <div class="sunken-digit-box">
+              <span id="lblKey" class="stepper-value">0</span>
+            </div>
+            <div class="stepper-arrows">
+              <button id="btnKeyUp" class="stepper-btn">▲</button>
+              <button id="btnKeyDown" class="stepper-btn">▼</button>
+            </div>
+          </div>
+
+          <div class="stepper-box">
+            <span class="stepper-title">TEMPO</span>
+            <div class="sunken-digit-box">
+              <span id="lblTempo" class="stepper-value">100%</span>
+            </div>
+            <div class="stepper-arrows">
+              <button id="btnTempoUp" class="stepper-btn">▲</button>
+              <button id="btnTempoDown" class="stepper-btn">▼</button>
+            </div>
+          </div>
+
+          <button id="btnResetControls" class="wg-btn reset-btn" title="Reset Key & Tempo">Reset</button>
+        </div>
+
+        <!-- Windows & Extras Drawer Buttons -->
+        <div class="extra-buttons-cluster">
+          <button id="btnOpenInstruments" class="wg-btn feature-btn" title="Open Attached Instruments Window">Instruments...</button>
+          <button id="btnSetup" class="wg-btn feature-btn" title="WinGroove Audio Setup">Setup...</button>
+          <button id="btnPlaylistToggle" class="wg-btn feature-btn" title="Toggle Playlist">Playlist</button>
+        </div>
+      </div>
+
+      <!-- Center / Right: Master Stereo Section + 16 Channel Strips -->
+      <div class="mixer-section">
+        <!-- Master Stereo Section -->
+        <div class="master-strip">
+          <div class="strip-header">MASTER</div>
+          <!-- Stereo Dual 12-segment Level Meter -->
+          <div class="master-meters-dual">
+            <div class="led-meter-col" id="masterMeterL">
+              <!-- 12 led bars (L) -->
+            </div>
+            <div class="led-meter-col" id="masterMeterR">
+              <!-- 12 led bars (R) -->
+            </div>
+          </div>
+          <!-- Master Switch & Fader -->
+          <div class="master-controls">
+            <div class="switch-wrap">
+              <span class="row-label">ON</span>
+              <button id="masterOnSwitch" class="wg-led-switch active" title="Master Sound Output"></button>
+            </div>
+            <div class="fader-wrap">
+              <input type="range" id="masterFader" class="classic-vertical-fader" orient="vertical" min="0" max="127" value="100" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 16 MIDI Channels Grid -->
+        <div class="channels-container">
+          <div class="channels-strip-row" id="channelsRow">
+            <!-- 16 strips dynamically or statically rendered -->
+          </div>
+        </div>
+
+        <!-- Right Side Row Labels matching Classic WinGroove -->
+        <div class="mixer-labels-col">
+          <div class="label-cell label-level">LEVEL</div>
+          <div class="label-cell label-auto">AUTO</div>
+          <div class="label-cell label-on">ON</div>
+          <div class="label-cell label-fader">FADER</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsible Playlist Drawer -->
+    <div class="playlist-drawer" id="playlistDrawer">
+      <div class="drawer-header">
+        <span class="drawer-title">Playlist (<span id="queueCount">0</span> tracks)</span>
+        <div class="drawer-tools">
+          <button id="btnAddFiles" class="wg-btn">Add Files...</button>
+          <button id="btnClearQueue" class="wg-btn">Clear</button>
+          <button id="btnSaveWav" class="wg-btn">Render WAV...</button>
+          <button id="btnClosePlaylist" class="win-btn">✕</button>
+        </div>
+      </div>
+      <div class="queue-list" id="queueList"></div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="statusbar">
+      <div class="status-cell cell-msg" id="statusMsg">Ready</div>
+      <div class="status-cell cell-voices" id="statusVoices">Voices: 0/64</div>
+      <div class="status-cell cell-soundfont" id="statusSf" title="SoundFont">WinGroove.sf2</div>
     </div>
   </div>
-</div>
 
-<div class="dialog hidden" id="about">
-  <div class="win small-win">
-    <div class="titlebar">
-      <span class="ticon"></span>
-      <span class="ttext">About WinGroove Reboot</span>
-      <button class="win-close" id="aboutClose" title="Close">&#10005;</button>
-    </div>
-    <div class="about-body">
-      <p><b>WinGroove Reboot</b> v1.0.0</p>
-      <p>A from-scratch tribute to the classic WinGroove software wavetable MIDI player for Windows 95/98.</p>
-      <p>Features: Echoing software reverb, dynamic sound leveler/compressor, 16-channel live instrument window, and offline WAV rendering.</p>
-      <p>Put a file named <code>WinGroove.sf2</code> in <code>soundfonts/</code> to use it as the default bank.</p>
-      <p style="text-align:right"><button class="btn" id="aboutOk">OK</button></p>
+  <!-- WinGroove Setup Modal -->
+  <div class="wg-modal-overlay" id="setupModal">
+    <div class="win modal-window">
+      <div class="titlebar">
+        <span class="window-title">WinGroove Setup</span>
+        <button id="btnCloseSetup" class="win-btn win-btn-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="setup-group">
+          <span class="group-title">Polyphony & Quality</span>
+          <div class="setup-row">
+            <label>Max Polyphony:</label>
+            <select id="selPolyphony" class="sunken-select">
+              <option value="32">32 Voices (Lo-Fi)</option>
+              <option value="64" selected>64 Voices (Standard)</option>
+              <option value="128">128 Voices (Full)</option>
+            </select>
+          </div>
+        </div>
+        <div class="setup-group">
+          <span class="group-title">Effects & Leveling</span>
+          <div class="setup-row">
+            <label>Software Reverb (Echo):</label>
+            <input type="range" id="reverbSlider" min="0" max="100" value="35" class="classic-slider" />
+            <span id="reverbVal">35%</span>
+          </div>
+          <div class="setup-row">
+            <label>Sound Leveler (Compressor):</label>
+            <input type="range" id="levelerSlider" min="0" max="100" value="40" class="classic-slider" />
+            <span id="levelerVal">40%</span>
+          </div>
+        </div>
+        <div class="setup-group">
+          <span class="group-title">SoundFont Management</span>
+          <div class="setup-row">
+            <button id="btnChangeSf" class="wg-btn">Load External .sf2...</button>
+            <button id="btnOpenSfFolder" class="wg-btn">Open SoundFonts Folder</button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="btnApplySetup" class="wg-btn">OK</button>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="dropzone hidden" id="drop">Drop MIDI / SF2 files</div>
-<input type="file" id="fileMidi" accept=".mid,.midi,.rmi,.kar" multiple hidden>
-<input type="file" id="fileSf" accept=".sf2" hidden>
-
-<script src="js/midifile.js"></script>
-<script src="js/sf2.js"></script>
-<script src="js/synth.js"></script>
-<script src="js/player.js"></script>
-<script src="js/wav.js"></script>
-<script src="js/app.js"></script>
+  <script src="js/midifile.js"></script>
+  <script src="js/sf2parser.js"></script>
+  <script src="js/synth.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
