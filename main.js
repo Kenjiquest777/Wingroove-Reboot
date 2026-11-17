@@ -1,5 +1,8 @@
 'use strict';
-/* WinGroove Reboot - Electron main process */
+/* WinGroove Reboot - Electron main process
+ * Orchestrates classic Player window and standalone attached Instruments window
+ * with magnetic docking, synchronization, and IPC message routing.
+ */
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
@@ -10,7 +13,11 @@ const MIDI_FILTER = { name: 'MIDI Files', extensions: ['mid', 'midi', 'rmi', 'ka
 const SF_FILTER = { name: 'SoundFont 2', extensions: ['sf2'] };
 
 let win = null;
+let instWin = null;
 let rendererReady = false;
+let isAttached = true;
+let dockSide = 'bottom';
+let lastPlayerBounds = null;
 const pending = [];
 
 const argFiles = (argv) => argv.slice(1).filter((a) => !a.startsWith('-') && OPENABLE.test(a));
@@ -59,96 +66,265 @@ async function readItems(paths) {
   return out;
 }
 
-async function sendFiles(paths) {
-  if (!paths.length) return;
-  if (!win || !rendererReady) { pending.push(...paths); return; }
-  win.webContents.send('wg:files', await readItems(paths));
+function updateAttachedPosition() {
+  if (!win || !instWin || !isAttached || instWin.isDestroyed() || win.isDestroyed()) return;
+  const pb = win.getBounds();
+  const ib = instWin.getBounds();
+  const targetX = pb.x;
+  const targetY = dockSide === 'bottom' ? (pb.y + pb.height) : (pb.y - ib.height);
+  if (ib.x !== targetX || ib.y !== targetY) {
+    instWin.setPosition(targetX, targetY);
+  }
 }
 
-function createWindow() {
-  win = new BrowserWindow({
-    width: 660,
-    height: 760,
-    minWidth: 520,
-    minHeight: 560,
-    title: 'WinGroove Reboot',
-    backgroundColor: '#008080',
-    autoHideMenuBar: true,
+function createInstrumentsWindow() {
+  if (instWin && !instWin.isDestroyed()) {
+    instWin.show();
+    instWin.focus();
+    return;
+  }
+
+  const pb = win ? win.getBounds() : { x: 100, y: 100, width: 768, height: 400 };
+  const targetX = pb.x;
+  const targetY = pb.y + pb.height;
+
+  instWin = new BrowserWindow({
+    width: pb.width || 768,
+    height: 380,
+    x: targetX,
+    y: targetY,
+    minWidth: 700,
+    minHeight: 280,
+    frame: false,
+    resizable: true,
+    show: false,
+    backgroundColor: '#c0c0c0',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
-      autoplayPolicy: 'no-user-gesture-required',
     },
   });
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  win.on('closed', () => { win = null; rendererReady = false; });
-}
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  app.on('second-instance', (_e, argv) => {
-    if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
-    sendFiles(argFiles(argv));
+  instWin.loadFile(path.join(__dirname, 'renderer', 'instruments.html'));
+
+  instWin.once('ready-to-show', () => {
+    instWin.show();
+    instWin.webContents.send('instruments-win-status', { attached: isAttached });
+    updateAttachedPosition();
   });
 
-  // macOS: files opened from Finder / dock
-  app.on('open-file', (e, p) => { e.preventDefault(); sendFiles([p]); });
+  instWin.on('move', () => {
+    if (!win || win.isDestroyed()) return;
+    const pb = win.getBounds();
+    const ib = instWin.getBounds();
+    const snapThreshold = 30;
 
-  pending.push(...argFiles(process.argv));
+    // Check bottom snap
+    const bottomDist = Math.abs(ib.y - (pb.y + pb.height));
+    const topDist = Math.abs((ib.y + ib.height) - pb.y);
+    const xDist = Math.abs(ib.x - pb.x);
 
-  app.whenReady().then(() => {
-    if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
-
-    ipcMain.on('wg:ready', () => {
-      rendererReady = true;
-      const files = pending.splice(0);
-      if (files.length) sendFiles(files);
-    });
-
-    ipcMain.handle('wg:default-sf', async () => {
-      return await findDefaultSoundfont();
-    });
-
-    ipcMain.handle('wg:open-sf-folder', async () => {
-      const dir = getSoundfontsDir();
-      try {
-        await fs.mkdir(dir, { recursive: true });
-      } catch (_) {}
-      return shell.openPath(dir);
-    });
-
-    ipcMain.handle('wg:open', async (_e, kind) => {
-      const isSf = kind === 'sf2';
-      const opts = {
-        title: isSf ? 'Load SoundFont' : 'Open MIDI Files',
-        properties: isSf ? ['openFile'] : ['openFile', 'multiSelections'],
-        filters: [isSf ? SF_FILTER : MIDI_FILTER, { name: 'All Files', extensions: ['*'] }],
-      };
-      if (isSf) {
-        opts.defaultPath = getSoundfontsDir();
+    if (xDist < snapThreshold && bottomDist < snapThreshold) {
+      isAttached = true;
+      dockSide = 'bottom';
+      instWin.setPosition(pb.x, pb.y + pb.height);
+      instWin.webContents.send('instruments-win-status', { attached: true });
+    } else if (xDist < snapThreshold && topDist < snapThreshold) {
+      isAttached = true;
+      dockSide = 'top';
+      instWin.setPosition(pb.x, pb.y - ib.height);
+      instWin.webContents.send('instruments-win-status', { attached: true });
+    } else {
+      if (isAttached) {
+        isAttached = false;
+        instWin.webContents.send('instruments-win-status', { attached: false });
       }
-      const res = await dialog.showOpenDialog(win, opts);
-      if (res.canceled) return [];
-      return readItems(res.filePaths);
-    });
-
-    ipcMain.handle('wg:save', async (_e, name, data) => {
-      const res = await dialog.showSaveDialog(win, {
-        title: 'Save as WAV',
-        defaultPath: path.join(app.getPath('music'), String(name || 'song.wav')),
-        filters: [{ name: 'WAVE Audio', extensions: ['wav'] }],
-      });
-      if (res.canceled || !res.filePath) return null;
-      await fs.writeFile(res.filePath, Buffer.from(data));
-      return res.filePath;
-    });
-
-    createWindow();
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+    }
   });
 
-  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+  instWin.on('close', (e) => {
+    // Hide instead of destroy so state remains intact
+    if (win && !win.isDestroyed() && !app.isQuitting) {
+      e.preventDefault();
+      instWin.hide();
+    }
+  });
 }
+
+function createWindow() {
+  win = new BrowserWindow({
+    width: 772,
+    height: 420,
+    minWidth: 760,
+    minHeight: 380,
+    resizable: true,
+    useContentSize: true,
+    backgroundColor: '#008080',
+    title: 'WinGroove Reboot',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  win.on('move', () => {
+    updateAttachedPosition();
+  });
+
+  win.on('resize', () => {
+    if (instWin && !instWin.isDestroyed() && isAttached) {
+      const pb = win.getBounds();
+      instWin.setSize(pb.width, instWin.getBounds().height);
+      updateAttachedPosition();
+    }
+  });
+
+  win.on('minimize', () => {
+    if (instWin && !instWin.isDestroyed() && instWin.isVisible()) {
+      instWin.minimize();
+    }
+  });
+
+  win.on('restore', () => {
+    if (instWin && !instWin.isDestroyed()) {
+      instWin.restore();
+      updateAttachedPosition();
+    }
+  });
+
+  win.on('closed', () => {
+    win = null;
+    if (instWin && !instWin.isDestroyed()) {
+      instWin.destroy();
+      instWin = null;
+    }
+  });
+
+  win.webContents.on('did-finish-load', async () => {
+    rendererReady = true;
+    while (pending.length) {
+      const items = pending.shift();
+      win.webContents.send('open-files', items);
+    }
+  });
+}
+
+// IPC Handlers
+ipcMain.handle('load-default-soundfont', async () => {
+  return await findDefaultSoundfont();
+});
+
+ipcMain.handle('open-file-dialog', async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Open MIDI or SoundFont File',
+    filters: [MIDI_FILTER, SF_FILTER, { name: 'All Files', extensions: ['*'] }],
+    properties: ['openFile', 'multiSelections'],
+  });
+  if (res.canceled || !res.filePaths.length) return [];
+  return await readItems(res.filePaths);
+});
+
+ipcMain.handle('open-soundfont-dialog', async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Select SoundFont 2.0 (.sf2)',
+    filters: [SF_FILTER],
+    properties: ['openFile'],
+  });
+  if (res.canceled || !res.filePaths.length) return null;
+  const items = await readItems([res.filePaths[0]]);
+  return items[0] || null;
+});
+
+ipcMain.handle('open-soundfonts-folder', async () => {
+  const dir = getSoundfontsDir();
+  try {
+    await fs.mkdir(dir, { recursive: true });
+    await shell.openPath(dir);
+    return true;
+  } catch (err) {
+    console.error('Could not open soundfonts folder', err);
+    return false;
+  }
+});
+
+ipcMain.handle('save-wav-dialog', async (_e, suggestedName) => {
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Save Rendered WAV File',
+    defaultPath: suggestedName || 'wingroove-output.wav',
+    filters: [{ name: 'WAV Audio', extensions: ['wav'] }],
+  });
+  if (res.canceled) return null;
+  return res.filePath;
+});
+
+ipcMain.handle('save-wav-file', async (_e, filePath, data) => {
+  try {
+    await fs.writeFile(filePath, Buffer.from(data));
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.on('toggle-instruments-window', (_e, show) => {
+  if (!instWin || instWin.isDestroyed()) {
+    if (show !== false) createInstrumentsWindow();
+  } else {
+    if (show === false || instWin.isVisible()) {
+      instWin.hide();
+    } else {
+      instWin.show();
+      instWin.focus();
+      updateAttachedPosition();
+    }
+  }
+});
+
+ipcMain.on('set-instruments-attached', (_e, attached, dockPos) => {
+  isAttached = !!attached;
+  if (dockPos) dockSide = dockPos;
+  if (instWin && !instWin.isDestroyed()) {
+    instWin.webContents.send('instruments-win-status', { attached: isAttached });
+    if (isAttached) updateAttachedPosition();
+  }
+});
+
+ipcMain.on('set-instruments-height', (_e, h) => {
+  if (instWin && !instWin.isDestroyed()) {
+    const b = instWin.getBounds();
+    instWin.setSize(b.width, h);
+    updateAttachedPosition();
+  }
+});
+
+ipcMain.on('instruments-cmd', (_e, cmd) => {
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('instruments-cmd', cmd);
+  }
+});
+
+ipcMain.on('relay-instruments-state', (_e, state) => {
+  if (instWin && !instWin.isDestroyed()) {
+    instWin.webContents.send('instruments-state', state);
+  }
+});
+
+app.whenReady().then(async () => {
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('before-quit', () => {
+  app.isQuitting = true;
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
