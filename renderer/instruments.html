@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>WinGroove Instruments</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="wg-subwindow wg-inst-window">
+  <div class="titlebar draggable-header">
+    <div class="title-left">
+      <div class="system-menu-icon" title="System Menu"></div>
+      <span class="window-title">WinGroove Instruments</span>
+    </div>
+    <div class="title-controls non-draggable">
+      <button id="btnDockToggle" class="win-btn win-btn-pin" title="Toggle Dock / Float">🧲</button>
+      <button id="btnInstClose" class="win-btn win-btn-close" title="Close">✕</button>
+    </div>
+  </div>
+
+  <div class="inst-body">
+    <!-- 8x2 Classic Channel Grid matching WinGroove reference -->
+    <div class="inst-grid-container">
+      <div class="inst-col" id="colLeft">
+        <!-- Ch 1 - 8 injected here -->
+      </div>
+      <div class="inst-col" id="colRight">
+        <!-- Ch 9 - 16 injected here -->
+      </div>
+    </div>
+
+    <!-- Quick Audition & Category Browser Drawer -->
+    <div class="inst-drawer" id="instDrawer">
+      <div class="drawer-header">
+        <span class="drawer-title" id="drawerTargetLabel">Change Instrument</span>
+        <div class="drawer-tools">
+          <input type="text" id="instSearch" class="sunken-input" placeholder="Filter..." />
+          <select id="instCatFilter" class="sunken-select">
+            <option value="">All Categories</option>
+            <option value="piano">Piano</option>
+            <option value="chromatic">Chromatic Percussion</option>
+            <option value="organ">Organ</option>
+            <option value="guitar">Guitar</option>
+            <option value="bass">Bass</option>
+            <option value="strings">Strings & Ensemble</option>
+            <option value="brass">Brass</option>
+            <option value="reed">Reed</option>
+            <option value="pipe">Pipe</option>
+            <option value="synth_lead">Synth Lead</option>
+            <option value="synth_pad">Synth Pad</option>
+            <option value="synth_fx">Synth FX</option>
+            <option value="ethnic">Ethnic</option>
+            <option value="percussive">Percussive</option>
+            <option value="sfx">Sound Effects</option>
+            <option value="drums">Drum Kits</option>
+          </select>
+        </div>
+      </div>
+      <div class="drawer-listbox-wrap">
+        <div class="inst-listbox" id="instListbox">
+          <!-- Presets listed here -->
+        </div>
+      </div>
+      <div class="drawer-footer">
+        <div class="audition-cluster">
+          <button id="btnAudition" class="win98-btn">▶ Audition</button>
+          <select id="auditionNote" class="sunken-select">
+            <option value="48">C3 (Low)</option>
+            <option value="60" selected>C4 (Mid)</option>
+            <option value="72">C5 (High)</option>
+          </select>
+        </div>
+        <div class="drawer-actions">
+          <button id="btnRevertChannel" class="win98-btn">Revert Channel</button>
+          <button id="btnResetAll" class="win98-btn">Reset All</button>
+          <button id="btnCloseDrawer" class="win98-btn">Close Browser</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="inst-statusbar">
+      <span id="instStatusText">Ready. Click any channel instrument to browse & audition.</span>
+    </div>
+  </div>
+
+  <script src="js/instruments.js"></script>
+</body>
+</html>
